@@ -1,7 +1,7 @@
 extends SceneTree
 
-const BUNDLE_ROOT := "res://contracts/persistly-contract-v0.1.0"
-const MANIFEST_PATH := "res://contracts/persistly-contract-v0.1.0/manifest.json"
+const BUNDLE_ROOT := "res://contracts/persistly-contract-v0.2.0"
+const MANIFEST_PATH := "res://contracts/persistly-contract-v0.2.0/manifest.json"
 
 
 func _initialize() -> void:

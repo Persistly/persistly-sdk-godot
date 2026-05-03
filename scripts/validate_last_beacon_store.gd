@@ -24,7 +24,7 @@ func _initialize() -> void:
 		"config": {
 			"baseUrl": "http://127.0.0.1:8080",
 			"runtimeKey": "ps_test_example",
-			"externalUserId": "auth0|player-184",
+			"playerRef": "player-184",
 			"characterName": "Ayla",
 			"slotLabel": "Beacon-A",
 		},

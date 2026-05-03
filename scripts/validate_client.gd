@@ -5,7 +5,7 @@ const BASE_URL := "http://127.0.0.1:18080"
 const RUNTIME_KEY := "ps_test_local"
 
 const CREATE_PAYLOAD := {
-	"externalUserId": "auth0|123",
+	"playerRef": "player-184",
 	"metadata": {
 		"characterName": "Ayla",
 		"slot": 2,
@@ -19,7 +19,7 @@ const CREATE_PAYLOAD := {
 const CREATE_SAVE_RESPONSE := {
 	"save": {
 		"saveId": "sv_01HXYZ",
-		"externalUserId": "auth0|123",
+		"playerRef": "player-184",
 		"metadata": {
 			"characterName": "Ayla",
 			"slot": 2,
@@ -37,7 +37,7 @@ const CREATE_SAVE_RESPONSE := {
 const LOAD_SAVE_RESPONSE := {
 	"save": {
 		"saveId": "sv_01HXYZ",
-		"externalUserId": "auth0|123",
+		"playerRef": "player-184",
 		"metadata": {
 			"characterName": "Ayla",
 			"slot": 2,
@@ -56,7 +56,7 @@ const SYNC_ACCEPTED_RESPONSE := {
 	"status": "accepted",
 	"save": {
 		"saveId": "sv_01HXYZ",
-		"externalUserId": "auth0|123",
+		"playerRef": "player-184",
 		"metadata": {
 			"characterName": "Ayla",
 			"slot": 2,
@@ -75,7 +75,7 @@ const SYNC_CONFLICT_RESPONSE := {
 	"status": "conflict",
 	"save": {
 		"saveId": "sv_01HXYZ",
-		"externalUserId": "auth0|123",
+		"playerRef": "player-184",
 		"metadata": {
 			"characterName": "Ayla",
 			"slot": 2,
@@ -208,7 +208,7 @@ func _expect_save(actual: Variant, expected: Dictionary, label: String) -> void:
 
 	var keys := [
 		"saveId",
-		"externalUserId",
+		"playerRef",
 		"metadata",
 		"state",
 		"version",
@@ -296,7 +296,7 @@ func _seed_fixture_responses(client: Object) -> void:
 		"status": "accepted",
 		"save": {
 			"saveId": "sv_01HXYZ",
-			"externalUserId": "auth0|123",
+			"playerRef": "player-184",
 			"metadata": {
 				"characterName": "Ayla",
 				"slot": 2,

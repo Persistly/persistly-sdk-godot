@@ -2,7 +2,7 @@
 
 This repository is the Godot runtime SDK for Persistly.
 
-It pins contract bundle `persistly-contract-v0.1.0` under `contracts/` and keeps the public runtime surface intentionally small:
+It pins contract bundle `persistly-contract-v0.2.0` under `contracts/` and keeps the public runtime surface intentionally small:
 
 - `create_save(payload)`
 - `load_save(save_id)`
@@ -15,7 +15,7 @@ The client is designed around small caller-provided configuration:
 - `runtime_key` for bearer authentication
 - optional `base_url` only for explicit validation infrastructure
 
-There is no `external_user_id` lookup helper in this scaffold. The caller is expected to resolve identity outside the SDK and pass the runtime credentials directly.
+There is no `player_ref` lookup helper in this scaffold. The caller is expected to resolve identity outside the SDK and pass the runtime credentials directly.
 
 ## Install
 
@@ -26,7 +26,7 @@ addons/persistly/
 contracts/
 ```
 
-The addon reads the pinned contract bundle from `res://contracts/persistly-contract-v0.1.0`, so copying only the addon without `contracts/` is incomplete.
+The addon reads the pinned contract bundle from `res://contracts/persistly-contract-v0.2.0`, so copying only the addon without `contracts/` is incomplete.
 
 When the public repository is connected, use:
 

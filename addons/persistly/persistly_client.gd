@@ -1,9 +1,9 @@
 extends RefCounted
 class_name PersistlyClient
 
-const SDK_VERSION := "0.9.0"
-const BUNDLE_VERSION := "persistly-contract-v0.1.0"
-const BUNDLE_ROOT := "res://contracts/persistly-contract-v0.1.0"
+const SDK_VERSION := "0.9.1"
+const BUNDLE_VERSION := "persistly-contract-v0.2.0"
+const BUNDLE_ROOT := "res://contracts/persistly-contract-v0.2.0"
 const DEFAULT_BASE_URL := "https://api.persistly.app"
 const DEFAULT_TIMEOUT_SECONDS := 30.0
 const METADATA_MAX_BYTES := 16384
@@ -61,11 +61,11 @@ func create_save(payload: Dictionary) -> Dictionary:
 	if not payload_error.is_empty():
 		return payload_error
 
-	if payload.has("externalUserId"):
-		var external_user_id = payload.get("externalUserId")
-		if not (typeof(external_user_id) == TYPE_STRING or external_user_id == null):
-			return _error_result(ERROR_INVALID_REQUEST, "externalUserId must be a string or null.")
-		request_body["externalUserId"] = external_user_id
+	if payload.has("playerRef"):
+		var player_ref = payload.get("playerRef")
+		if not (typeof(player_ref) == TYPE_STRING or player_ref == null):
+			return _error_result(ERROR_INVALID_REQUEST, "playerRef must be a string or null.")
+		request_body["playerRef"] = player_ref
 
 	var response := _request_json("POST", "/api/v1/saves", request_body)
 	if response.has("error"):
@@ -357,7 +357,7 @@ func _normalize_save_envelope(response: Dictionary, cache_result: bool) -> Dicti
 
 	var required_keys := [
 		"saveId",
-		"externalUserId",
+		"playerRef",
 		"metadata",
 		"state",
 		"version",
@@ -370,8 +370,8 @@ func _normalize_save_envelope(response: Dictionary, cache_result: bool) -> Dicti
 
 	if typeof(save["saveId"]) != TYPE_STRING or String(save["saveId"]).is_empty():
 		return _error_result(ERROR_SERVER, "Persistly save payload has an invalid saveId.")
-	if not (typeof(save["externalUserId"]) == TYPE_STRING or save["externalUserId"] == null):
-		return _error_result(ERROR_SERVER, "Persistly save payload has an invalid externalUserId.")
+	if not (typeof(save["playerRef"]) == TYPE_STRING or save["playerRef"] == null):
+		return _error_result(ERROR_SERVER, "Persistly save payload has an invalid playerRef.")
 	if typeof(save["metadata"]) != TYPE_DICTIONARY:
 		return _error_result(ERROR_SERVER, "Persistly save payload metadata must be a dictionary.")
 	if typeof(save["state"]) != TYPE_DICTIONARY:

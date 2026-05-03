@@ -23,7 +23,7 @@ Inside the game:
 
 1. Use `https://api.persistly.app` as the API base URL for standard Persistly traffic.
 2. Paste a `ps_test_...` runtime key from the Persistly dashboard.
-3. Optionally fill `External User ID`, `Character Name`, and `Slot Label`.
+3. Optionally fill `Player reference`, `Character Name`, and `Slot Label`.
 4. Press `Connect / Resume Remote Save`.
 5. Play the idle loop and use `Sync Now` to push canonical state to Persistly.
 

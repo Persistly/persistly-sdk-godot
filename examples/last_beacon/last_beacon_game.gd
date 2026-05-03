@@ -23,7 +23,7 @@ var _auto_sync_timer: Timer
 
 var _base_url_input: LineEdit
 var _runtime_key_input: LineEdit
-var _external_user_id_input: LineEdit
+var _player_ref_input: LineEdit
 var _character_name_input: LineEdit
 var _slot_label_input: LineEdit
 var _resources_label: Label
@@ -249,7 +249,7 @@ func _build_ui() -> void:
 
 	_base_url_input = _labeled_input(config_box, "API Base URL", false)
 	_runtime_key_input = _labeled_input(config_box, "Runtime Key", true)
-	_external_user_id_input = _labeled_input(config_box, "External User ID", false)
+	_player_ref_input = _labeled_input(config_box, "Player reference", false)
 	_character_name_input = _labeled_input(config_box, "Character Name", false)
 	_slot_label_input = _labeled_input(config_box, "Slot Label", false)
 
@@ -370,7 +370,7 @@ func _apply_profile_to_inputs() -> void:
 	var config: Dictionary = _profile.get("config", {})
 	_base_url_input.text = String(config.get("baseUrl", "https://api.persistly.app"))
 	_runtime_key_input.text = String(config.get("runtimeKey", ""))
-	_external_user_id_input.text = String(config.get("externalUserId", ""))
+	_player_ref_input.text = String(config.get("playerRef", ""))
 	_character_name_input.text = String(config.get("characterName", "Ayla"))
 	_slot_label_input.text = String(config.get("slotLabel", "Beacon-A"))
 
@@ -389,7 +389,7 @@ func _current_config() -> Dictionary:
 	return {
 		"baseUrl": _base_url_input.text.strip_edges(),
 		"runtimeKey": _runtime_key_input.text.strip_edges(),
-		"externalUserId": _external_user_id_input.text.strip_edges(),
+		"playerRef": _player_ref_input.text.strip_edges(),
 		"characterName": _character_name_input.text.strip_edges(),
 		"slotLabel": _slot_label_input.text.strip_edges(),
 	}
@@ -413,7 +413,7 @@ func _build_client(config: Dictionary):
 
 func _create_remote_save(client) -> void:
 	var payload := {
-		"externalUserId": _nullable_string(String(_current_config().get("externalUserId", ""))),
+		"playerRef": _nullable_string(String(_current_config().get("playerRef", ""))),
 		"metadata": _current_metadata(),
 		"state": _state.to_save_state(),
 	}

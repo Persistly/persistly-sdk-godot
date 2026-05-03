@@ -1,0 +1,5 @@
+.godot/
+.import/
+*.tmp
+*.translation
+.DS_Store

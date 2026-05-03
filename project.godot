@@ -1,0 +1,7 @@
+[application]
+config/name="Persistly Godot SDK - Last Beacon"
+config/features=PackedStringArray("4.2")
+run/main_scene="res://examples/last_beacon/last_beacon.tscn"
+
+[rendering]
+renderer/rendering_method="mobile"

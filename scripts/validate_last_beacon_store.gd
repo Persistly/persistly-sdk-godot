@@ -18,7 +18,8 @@ func _initialize() -> void:
 
 	var initial = store.load_profile()
 	_expect(initial.get("config", {}).is_empty(), "Initial config should be empty after reset.")
-	_expect(initial.get("saveId", "") == "", "Initial saveId should be empty after reset.")
+	_expect(initial.get("profileSaveId", "") == "", "Initial profileSaveId should be empty after reset.")
+	_expect(initial.get("characterSaveId", "") == "", "Initial characterSaveId should be empty after reset.")
 
 	var profile := {
 		"config": {
@@ -28,7 +29,9 @@ func _initialize() -> void:
 			"characterName": "Ayla",
 			"slotLabel": "Beacon-A",
 		},
-		"saveId": "sv_01HXYZ",
+		"profileSaveId": "sv_profile",
+		"profileSessionToken": "pst_profile_session",
+		"characterSaveId": "sv_01HXYZ",
 		"version": 7,
 		"state": {
 			"scrap": 88,
@@ -40,14 +43,17 @@ func _initialize() -> void:
 	_expect(bool(save_result), "Saving a profile should succeed.")
 
 	var reloaded = store.load_profile()
-	_expect(reloaded.get("saveId", "") == "sv_01HXYZ", "Reloaded saveId should match the saved value.")
+	_expect(reloaded.get("profileSaveId", "") == "sv_profile", "Reloaded profileSaveId should match the saved value.")
+	_expect(reloaded.get("profileSessionToken", "") == "pst_profile_session", "Reloaded profileSessionToken should match the saved value.")
+	_expect(reloaded.get("characterSaveId", "") == "sv_01HXYZ", "Reloaded characterSaveId should match the saved value.")
 	_expect(reloaded.get("version", 0) == 7, "Reloaded version should match the saved value.")
 	_expect(reloaded.get("config", {}).get("characterName", "") == "Ayla", "Reloaded config should keep the character name.")
 	_expect(reloaded.get("state", {}).get("workers", 0) == 4, "Reloaded state should keep nested state values.")
 
 	store.reset()
 	var reset_profile = store.load_profile()
-	_expect(reset_profile.get("saveId", "") == "", "Reset should remove the stored saveId.")
+	_expect(reset_profile.get("profileSaveId", "") == "", "Reset should remove the stored profileSaveId.")
+	_expect(reset_profile.get("characterSaveId", "") == "", "Reset should remove the stored characterSaveId.")
 	_expect(reset_profile.get("state", {}).is_empty(), "Reset should remove stored state.")
 
 	_finish()

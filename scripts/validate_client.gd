@@ -93,6 +93,83 @@ const SYNC_CONFLICT_RESPONSE := {
 	},
 }
 
+const CREATE_PROFILE_PAYLOAD := {
+	"playerRef": "player-184",
+	"profileMetadata": {
+		"displayName": "Ayla",
+	},
+	"accountData": {
+		"diamonds": 20,
+	},
+	"characterMetadata": {
+		"slot": 1,
+		"name": "Ayla",
+	},
+	"characterState": {
+		"gold": 100,
+		"level": 1,
+	},
+}
+
+const CREATE_PROFILE_RESPONSE := {
+	"profile": {
+		"profileSaveId": "sv_profile",
+		"profileSessionToken": "pst_profile_session",
+		"save": {
+			"saveId": "sv_profile",
+			"playerRef": "player-184",
+			"metadata": {
+				"displayName": "Ayla",
+			},
+			"state": {
+				"accountData": {
+					"diamonds": 20,
+				},
+				"characters": [
+					{
+						"saveId": "sv_char",
+						"metadata": {
+							"slot": 1,
+							"name": "Ayla",
+						},
+					},
+				],
+			},
+			"version": 1,
+			"createdAt": "2026-04-09T10:00:00Z",
+			"updatedAt": "2026-04-09T10:00:00Z",
+		},
+	},
+	"character": {
+		"save": {
+			"saveId": "sv_char",
+			"playerRef": "player-184",
+			"metadata": {
+				"slot": 1,
+				"name": "Ayla",
+			},
+			"state": {
+				"gold": 100,
+				"level": 1,
+			},
+			"version": 1,
+			"createdAt": "2026-04-09T10:00:00Z",
+			"updatedAt": "2026-04-09T10:00:00Z",
+		},
+	},
+}
+
+const RUNTIME_CONFIG_RESPONSE := {
+	"syncPolicy": {
+		"minRemoteSyncIntervalSeconds": 60,
+		"forceSyncCooldownSeconds": 10,
+		"syncOnBackground": true,
+		"syncOnForeground": true,
+		"syncOnReconnect": true,
+		"maxQueuedLocalSnapshots": 25,
+	},
+}
+
 var _failure_count := 0
 
 
@@ -109,6 +186,10 @@ func _initialize() -> void:
 	_check_create_save(client)
 	_check_load_save(client)
 	_check_sync_save(client)
+	_check_create_profile(client)
+	_check_profile_session_routes(client)
+	_check_runtime_config(client)
+	_check_autosave(client_script)
 	_check_error_mapping(client)
 	_check_cache_update(client)
 	_finish()
@@ -171,6 +252,102 @@ func _check_sync_save(client: Object) -> void:
 	var details = conflict.get("details", {})
 	if typeof(details) != TYPE_DICTIONARY or details.get("reason", "") != "base_version_mismatch":
 		_fail("sync_save conflict should preserve the conflict reason.")
+
+
+func _check_create_profile(client: Object) -> void:
+	var result = client.create_profile(CREATE_PROFILE_PAYLOAD)
+	if typeof(result) != TYPE_DICTIONARY or not result.has("profile") or not result.has("character"):
+		_fail("create_profile should return profile and character envelopes.")
+		return
+
+	var profile = result["profile"]
+	if typeof(profile) != TYPE_DICTIONARY:
+		_fail("create_profile profile envelope should be a dictionary.")
+		return
+
+	if profile.get("profileSaveId", "") != "sv_profile":
+		_fail("create_profile should expose profileSaveId.")
+	if profile.get("profileSessionToken", "") != "pst_profile_session":
+		_fail("create_profile should expose profileSessionToken.")
+	_expect_save(profile.get("save", {}), CREATE_PROFILE_RESPONSE["profile"]["save"], "create_profile profile")
+	_expect_save(result["character"].get("save", {}), CREATE_PROFILE_RESPONSE["character"]["save"], "create_profile character")
+
+
+func _check_profile_session_routes(client: Object) -> void:
+	var load_result = client.load_profile_character("sv_profile", "pst_profile_session", "sv_char")
+	if typeof(load_result) != TYPE_DICTIONARY or not load_result.has("save"):
+		_fail("load_profile_character should return a save envelope.")
+		return
+	_expect_save(load_result["save"], CREATE_PROFILE_RESPONSE["character"]["save"], "load_profile_character")
+
+	var sync_result = client.sync_profile_character("sv_profile", "pst_profile_session", "sv_char", {
+		"baseVersion": 1,
+		"metadata": {
+			"slot": 1,
+			"name": "Ayla",
+		},
+		"state": {
+			"gold": 110,
+			"level": 2,
+		},
+	})
+	if typeof(sync_result) != TYPE_DICTIONARY or sync_result.get("status", "") != "accepted":
+		_fail("sync_profile_character should return accepted status for a successful sync.")
+		return
+	_expect_save(sync_result.get("save", {}), SYNC_ACCEPTED_RESPONSE["save"], "sync_profile_character")
+
+
+func _check_runtime_config(client: Object) -> void:
+	var result = client.get_runtime_config()
+	if typeof(result) != TYPE_DICTIONARY or not result.has("syncPolicy"):
+		_fail("get_runtime_config should return syncPolicy.")
+		return
+
+	var policy = result["syncPolicy"]
+	if typeof(policy) != TYPE_DICTIONARY:
+		_fail("get_runtime_config syncPolicy should be a dictionary.")
+		return
+
+	if int(policy.get("minRemoteSyncIntervalSeconds", 0)) != 60:
+		_fail("get_runtime_config should preserve minRemoteSyncIntervalSeconds.")
+	if int(policy.get("forceSyncCooldownSeconds", 0)) != 10:
+		_fail("get_runtime_config should preserve forceSyncCooldownSeconds.")
+
+
+func _check_autosave(client_script: GDScript) -> void:
+	var store = client_script.PersistlyMemoryAutosaveDraftStore.new()
+	var draft := {
+		"profileSaveId": "sv_profile",
+		"profileSessionToken": "pst_profile_session",
+		"characterSaveId": "sv_char",
+		"metadata": {
+			"slot": 1,
+		},
+		"state": {
+			"level": 2,
+		},
+		"baseVersion": 1,
+	}
+
+	store.store_draft(draft)
+	var loaded = store.load_draft("sv_char")
+	if typeof(loaded) != TYPE_DICTIONARY or loaded.get("characterSaveId", "") != "sv_char":
+		_fail("PersistlyMemoryAutosaveDraftStore should load stored drafts by characterSaveId.")
+		return
+
+	var policy := {
+		"minRemoteSyncIntervalSeconds": 60,
+		"forceSyncCooldownSeconds": 10,
+		"maxQueuedLocalSnapshots": 25,
+	}
+	var manager = client_script.PersistlyAutosaveManager.new(store, policy)
+	var first = manager.should_sync_remote("sv_char", true)
+	manager.mark_remote_synced("sv_char")
+	var second = manager.should_sync_remote("sv_char", true)
+	if first != true:
+		_fail("PersistlyAutosaveManager should allow first forced sync.")
+	if second != false:
+		_fail("PersistlyAutosaveManager should enforce force sync cooldown.")
 
 
 func _check_error_mapping(client: Object) -> void:
@@ -316,3 +493,7 @@ func _seed_fixture_responses(client: Object) -> void:
 			"message": "Rate limit exceeded.",
 		},
 	})
+	client.register_fixture_response("POST", "/api/v1/profiles", 201, CREATE_PROFILE_RESPONSE)
+	client.register_fixture_response("GET", "/api/v1/profiles/sv_profile/characters/sv_char", 200, CREATE_PROFILE_RESPONSE["character"])
+	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/sync", 200, SYNC_ACCEPTED_RESPONSE)
+	client.register_fixture_response("GET", "/api/v1/runtime-config", 200, RUNTIME_CONFIG_RESPONSE)

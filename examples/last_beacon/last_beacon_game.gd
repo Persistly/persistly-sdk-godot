@@ -12,7 +12,9 @@ var _state
 var _store
 
 var _profile: Dictionary = {}
-var _save_id: String = ""
+var _profile_save_id: String = ""
+var _profile_session_token: String = ""
+var _character_save_id: String = ""
 var _version: int = 0
 var _sync_status: String = "Local only"
 var _last_error: String = ""
@@ -96,10 +98,10 @@ func _on_resume_pressed() -> void:
 	_refresh_ui()
 
 	var client = _build_client(config)
-	if _save_id.is_empty():
+	if _character_save_id.is_empty():
 		_create_remote_save(client)
 	else:
-		var load_result: Dictionary = client.load_save(_save_id)
+		var load_result: Dictionary = client.load_profile_character(_profile_save_id, _profile_session_token, _character_save_id)
 		if load_result.has("error"):
 			_last_error = String(load_result["error"].get("message", "Persistly load failed."))
 			_sync_status = "Remote load failed"
@@ -128,7 +130,7 @@ func _sync_now() -> void:
 	_refresh_ui()
 
 	var client = _build_client(config)
-	if _save_id.is_empty():
+	if _character_save_id.is_empty():
 		_create_remote_save(client)
 		_is_busy = false
 		_save_profile()
@@ -140,7 +142,7 @@ func _sync_now() -> void:
 		"metadata": _current_metadata(),
 		"state": _state.to_save_state(),
 	}
-	var sync_result: Dictionary = client.sync_save(_save_id, payload)
+	var sync_result: Dictionary = client.sync_profile_character(_profile_save_id, _profile_session_token, _character_save_id, payload)
 	if sync_result.has("error"):
 		_last_error = String(sync_result["error"].get("message", "Persistly sync failed."))
 		_sync_status = "Sync failed"
@@ -159,7 +161,9 @@ func _sync_now() -> void:
 
 func _on_new_beacon_pressed() -> void:
 	_state = STATE_SCRIPT.new()
-	_save_id = ""
+	_profile_save_id = ""
+	_profile_session_token = ""
+	_character_save_id = ""
 	_version = 0
 	_sync_status = "New local run"
 	_last_error = ""
@@ -176,7 +180,7 @@ func _on_tick_timeout() -> void:
 
 
 func _on_auto_sync_timeout() -> void:
-	if _save_id.is_empty():
+	if _character_save_id.is_empty():
 		return
 	if _is_busy:
 		return
@@ -376,7 +380,9 @@ func _apply_profile_to_inputs() -> void:
 
 
 func _restore_profile_state() -> void:
-	_save_id = String(_profile.get("saveId", ""))
+	_profile_save_id = String(_profile.get("profileSaveId", ""))
+	_profile_session_token = String(_profile.get("profileSessionToken", ""))
+	_character_save_id = String(_profile.get("characterSaveId", ""))
 	_version = int(_profile.get("version", 0))
 	var saved_state = _profile.get("state", {})
 	if typeof(saved_state) == TYPE_DICTIONARY and not saved_state.is_empty():
@@ -414,23 +420,34 @@ func _build_client(config: Dictionary):
 func _create_remote_save(client) -> void:
 	var payload := {
 		"playerRef": _nullable_string(String(_current_config().get("playerRef", ""))),
-		"metadata": _current_metadata(),
-		"state": _state.to_save_state(),
+		"profileMetadata": {
+			"sample": "last-beacon",
+		},
+		"accountData": {
+			"credits": 0,
+		},
+		"characterMetadata": _current_metadata(),
+		"characterState": _state.to_save_state(),
 	}
-	var created: Dictionary = client.create_save(payload)
+	var created: Dictionary = client.create_profile(payload)
 	if created.has("error"):
 		_last_error = String(created["error"].get("message", "Persistly create failed."))
 		_sync_status = "Create failed"
 		return
 
-	_apply_remote_save(created["save"])
-	_sync_status = "Remote save created"
+	var profile: Dictionary = created.get("profile", {})
+	var character: Dictionary = created.get("character", {})
+	_profile_save_id = String(profile.get("profileSaveId", ""))
+	_profile_session_token = String(profile.get("profileSessionToken", ""))
+	_apply_remote_save(character.get("save", {}))
+	_sync_status = "Remote profile created"
 
 
 func _apply_remote_save(save: Dictionary) -> void:
 	if typeof(save.get("state", null)) == TYPE_DICTIONARY:
 		_state.from_save_state(save["state"])
-	_save_id = String(save.get("saveId", ""))
+	if _character_save_id.is_empty():
+		_character_save_id = String(save.get("saveId", ""))
 	_version = int(save.get("version", 0))
 
 	var metadata: Dictionary = save.get("metadata", {})
@@ -446,7 +463,9 @@ func _apply_remote_save(save: Dictionary) -> void:
 func _save_profile() -> void:
 	_profile = {
 		"config": _current_config(),
-		"saveId": _save_id,
+		"profileSaveId": _profile_save_id,
+		"profileSessionToken": _profile_session_token,
+		"characterSaveId": _character_save_id,
 		"version": _version,
 		"state": _state.to_save_state(),
 	}
@@ -468,8 +487,9 @@ func _refresh_ui() -> void:
 		_state.core_upgrade_cost(),
 	]
 
-	_save_label.text = "Save ID: %s\nVersion: %d" % [
-		_save_id if not _save_id.is_empty() else "Not created yet",
+	_save_label.text = "Profile: %s\nCharacter: %s\nVersion: %d" % [
+		_profile_save_id if not _profile_save_id.is_empty() else "Not created yet",
+		_character_save_id if not _character_save_id.is_empty() else "Not created yet",
 		_version,
 	]
 	_sync_label.text = "Sync status: %s" % _sync_status

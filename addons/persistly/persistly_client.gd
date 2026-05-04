@@ -11,6 +11,7 @@ const STATE_MAX_BYTES := 262144
 
 const ERROR_INVALID_REQUEST := "invalid_request"
 const ERROR_UNAUTHORIZED := "unauthorized"
+const ERROR_FORBIDDEN := "forbidden"
 const ERROR_NOT_FOUND := "not_found"
 const ERROR_CONFLICT := "conflict"
 const ERROR_RATE_LIMITED := "rate_limited"
@@ -141,6 +142,173 @@ func sync_save(save_id: String, payload: Dictionary) -> Dictionary:
 	return normalized
 
 
+func create_profile(payload: Dictionary) -> Dictionary:
+	var preflight := _validate_runtime_configuration("create_profile")
+	if not preflight.is_empty():
+		return preflight
+
+	var account_data := payload.get("accountData", {})
+	var profile_metadata := payload.get("profileMetadata", {})
+	var character_metadata := payload.get("characterMetadata", {})
+	var character_state := payload.get("characterState", null)
+	if typeof(account_data) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "create_profile accountData must be a dictionary.")
+	if typeof(profile_metadata) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "create_profile profileMetadata must be a dictionary when provided.")
+	if typeof(character_metadata) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "create_profile characterMetadata must be a dictionary.")
+	if typeof(character_state) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "create_profile requires a dictionary characterState payload.")
+
+	var profile_payload_error := _validate_payload_sizes(profile_metadata, account_data)
+	if not profile_payload_error.is_empty():
+		return profile_payload_error
+	var character_payload_error := _validate_payload_sizes(character_metadata, character_state)
+	if not character_payload_error.is_empty():
+		return character_payload_error
+
+	var request_body: Dictionary = {
+		"accountData": account_data,
+		"profileMetadata": profile_metadata,
+		"characterMetadata": character_metadata,
+		"characterState": character_state,
+	}
+	if payload.has("playerRef"):
+		var player_ref = payload.get("playerRef")
+		if not (typeof(player_ref) == TYPE_STRING or player_ref == null):
+			return _error_result(ERROR_INVALID_REQUEST, "playerRef must be a string or null.")
+		request_body["playerRef"] = player_ref
+	if payload.has("externalProfileRef"):
+		var external_profile_ref = payload.get("externalProfileRef")
+		if not (typeof(external_profile_ref) == TYPE_DICTIONARY or external_profile_ref == null):
+			return _error_result(ERROR_INVALID_REQUEST, "externalProfileRef must be a dictionary or null.")
+		request_body["externalProfileRef"] = external_profile_ref
+
+	var response := _request_json("POST", "/api/v1/profiles", request_body)
+	if response.has("error"):
+		return response
+
+	return _normalize_create_profile_response(response, true)
+
+
+func load_profile(profile_save_id: String, profile_session_token: String) -> Dictionary:
+	var preflight := _validate_profile_session_configuration("load_profile", profile_save_id, profile_session_token)
+	if not preflight.is_empty():
+		return preflight
+
+	var response := _request_json(
+		"GET",
+		"/api/v1/profiles/" + _url_encode(profile_save_id),
+		null,
+		profile_session_token)
+	if response.has("error"):
+		return response
+
+	return _normalize_profile_envelope(response, true)
+
+
+func create_profile_character(profile_save_id: String, profile_session_token: String, payload: Dictionary) -> Dictionary:
+	var preflight := _validate_profile_session_configuration("create_profile_character", profile_save_id, profile_session_token)
+	if not preflight.is_empty():
+		return preflight
+
+	var character_metadata := payload.get("characterMetadata", {})
+	var character_state := payload.get("characterState", null)
+	if typeof(character_metadata) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "create_profile_character characterMetadata must be a dictionary.")
+	if typeof(character_state) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "create_profile_character requires a dictionary characterState payload.")
+
+	var payload_error := _validate_payload_sizes(character_metadata, character_state)
+	if not payload_error.is_empty():
+		return payload_error
+
+	var response := _request_json(
+		"POST",
+		"/api/v1/profiles/" + _url_encode(profile_save_id) + "/characters",
+		{
+			"characterMetadata": character_metadata,
+			"characterState": character_state,
+		},
+		profile_session_token)
+	if response.has("error"):
+		return response
+
+	return _normalize_character_envelope(response, true)
+
+
+func load_profile_character(profile_save_id: String, profile_session_token: String, character_save_id: String) -> Dictionary:
+	var preflight := _validate_profile_session_configuration("load_profile_character", profile_save_id, profile_session_token)
+	if not preflight.is_empty():
+		return preflight
+	if character_save_id.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "load_profile_character requires a non-empty character_save_id.")
+
+	var response := _request_json(
+		"GET",
+		"/api/v1/profiles/" + _url_encode(profile_save_id) + "/characters/" + _url_encode(character_save_id),
+		null,
+		profile_session_token)
+	if response.has("error"):
+		return response
+
+	return _normalize_save_envelope(response, true)
+
+
+func sync_profile_character(profile_save_id: String, profile_session_token: String, character_save_id: String, payload: Dictionary) -> Dictionary:
+	var preflight := _validate_profile_session_configuration("sync_profile_character", profile_save_id, profile_session_token)
+	if not preflight.is_empty():
+		return preflight
+	if character_save_id.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_character requires a non-empty character_save_id.")
+
+	if typeof(payload.get("state", null)) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_character requires a dictionary state payload.")
+
+	var metadata := payload.get("metadata", {})
+	if typeof(metadata) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_character metadata must be a dictionary when provided.")
+
+	var base_version := payload.get("baseVersion", null)
+	if base_version == null and _save_cache.has(character_save_id):
+		base_version = int(_save_cache[character_save_id].get("version", 0))
+	if base_version == null:
+		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_character requires baseVersion unless the character save is already cached.")
+	if typeof(base_version) != TYPE_INT:
+		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_character baseVersion must be an integer.")
+
+	var payload_error := _validate_payload_sizes(metadata, payload["state"])
+	if not payload_error.is_empty():
+		return payload_error
+
+	var response := _request_json(
+		"POST",
+		"/api/v1/profiles/" + _url_encode(profile_save_id) + "/characters/" + _url_encode(character_save_id) + "/sync",
+		{
+			"baseVersion": base_version,
+			"metadata": metadata,
+			"state": payload["state"],
+		},
+		profile_session_token)
+	if response.has("error"):
+		return response
+
+	return _normalize_sync_response(response, true, "sync_profile_character")
+
+
+func get_runtime_config() -> Dictionary:
+	var preflight := _validate_runtime_configuration("get_runtime_config")
+	if not preflight.is_empty():
+		return preflight
+
+	var response := _request_json("GET", "/api/v1/runtime-config")
+	if response.has("error"):
+		return response
+	if typeof(response.get("syncPolicy", null)) != TYPE_DICTIONARY:
+		return _error_result(ERROR_SERVER, "get_runtime_config response is missing syncPolicy.")
+	return response
+
+
 func get_cached_save(save_id: String) -> Dictionary:
 	if _save_cache.has(save_id):
 		return _duplicate_dictionary(_save_cache[save_id])
@@ -178,12 +346,23 @@ func _validate_runtime_configuration(action: String) -> Dictionary:
 	return {}
 
 
+func _validate_profile_session_configuration(action: String, profile_save_id: String, profile_session_token: String) -> Dictionary:
+	var preflight := _validate_runtime_configuration(action)
+	if not preflight.is_empty():
+		return preflight
+	if profile_save_id.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, action + " requires a non-empty profile_save_id.")
+	if profile_session_token.is_empty():
+		return _error_result(ERROR_FORBIDDEN, action + " requires a non-empty profile_session_token.")
+	return {}
+
+
 func _normalize_base_url(value: String) -> String:
 	var normalized := value.strip_edges().rstrip("/")
 	return DEFAULT_BASE_URL if normalized.is_empty() else normalized
 
 
-func _request_json(method: String, path: String, body: Variant = null) -> Dictionary:
+func _request_json(method: String, path: String, body: Variant = null, profile_session_token: String = "") -> Dictionary:
 	var fixture := _pop_fixture_response(method, path)
 	if not fixture.is_empty():
 		return _parse_transport_response(int(fixture.get("status_code", 500)), String(fixture.get("body", "")))
@@ -216,6 +395,8 @@ func _request_json(method: String, path: String, body: Variant = null) -> Dictio
 		"Accept: application/json",
 		"User-Agent: PersistlyGodotSDK/" + SDK_VERSION,
 	])
+	if not profile_session_token.is_empty():
+		headers.append("X-Persistly-Profile-Session: " + profile_session_token)
 	var request_path := String(url_parts.get("base_path", "")) + path
 	var request_body := ""
 	if body != null:
@@ -390,6 +571,78 @@ func _normalize_save_envelope(response: Dictionary, cache_result: bool) -> Dicti
 	return normalized
 
 
+func _normalize_sync_response(response: Dictionary, cache_result: bool, label: String) -> Dictionary:
+	var status = String(response.get("status", ""))
+	if status != "accepted" and status != "conflict":
+		return _error_result(ERROR_SERVER, label + " returned an unexpected status.")
+
+	var normalized := _normalize_save_envelope(response, cache_result)
+	if normalized.has("error"):
+		return normalized
+
+	if status == "conflict":
+		var details = normalized.get("details", {})
+		if typeof(details) != TYPE_DICTIONARY or String(details.get("reason", "")) != "base_version_mismatch":
+			return _error_result(ERROR_SERVER, label + " conflict response is missing a valid reason.")
+
+	return normalized
+
+
+func _normalize_create_profile_response(response: Dictionary, cache_result: bool) -> Dictionary:
+	if typeof(response.get("profile", null)) != TYPE_DICTIONARY:
+		return _error_result(ERROR_SERVER, "create_profile response is missing profile.")
+	if typeof(response.get("character", null)) != TYPE_DICTIONARY:
+		return _error_result(ERROR_SERVER, "create_profile response is missing character.")
+
+	var profile := _normalize_profile_envelope(response["profile"], cache_result)
+	if profile.has("error"):
+		return profile
+	var character := _normalize_character_envelope(response["character"], cache_result)
+	if character.has("error"):
+		return character
+
+	return {
+		"profile": profile,
+		"character": character,
+	}
+
+
+func _normalize_profile_envelope(response: Dictionary, cache_result: bool) -> Dictionary:
+	var envelope := response
+	if typeof(response.get("profile", null)) == TYPE_DICTIONARY:
+		envelope = response["profile"]
+
+	if typeof(envelope.get("profileSaveId", null)) != TYPE_STRING or String(envelope.get("profileSaveId", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly profile envelope is missing profileSaveId.")
+	if typeof(envelope.get("profileSessionToken", null)) != TYPE_STRING or String(envelope.get("profileSessionToken", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly profile envelope is missing profileSessionToken.")
+	if typeof(envelope.get("save", null)) != TYPE_DICTIONARY:
+		return _error_result(ERROR_SERVER, "Persistly profile envelope is missing save.")
+
+	var normalized_save := _normalize_save_envelope({"save": envelope["save"]}, cache_result)
+	if normalized_save.has("error"):
+		return normalized_save
+
+	var normalized := _duplicate_dictionary(envelope)
+	normalized["save"] = normalized_save["save"]
+	return normalized
+
+
+func _normalize_character_envelope(response: Dictionary, cache_result: bool) -> Dictionary:
+	var envelope := response
+	if typeof(response.get("character", null)) == TYPE_DICTIONARY:
+		envelope = response["character"]
+	if typeof(envelope.get("save", null)) != TYPE_DICTIONARY:
+		return _error_result(ERROR_SERVER, "Persistly character envelope is missing save.")
+
+	var normalized_save := _normalize_save_envelope({"save": envelope["save"]}, cache_result)
+	if normalized_save.has("error"):
+		return normalized_save
+	return {
+		"save": normalized_save["save"],
+	}
+
+
 func _error_result(code: String, message: String, details: Dictionary = {}) -> Dictionary:
 	var error := {
 		"code": code,
@@ -405,7 +658,7 @@ func _error_code_for_status(status_code: int) -> String:
 		400:
 			return ERROR_INVALID_REQUEST
 		403:
-			return ERROR_UNAUTHORIZED
+			return ERROR_FORBIDDEN
 		422:
 			return ERROR_INVALID_REQUEST
 		401:
@@ -486,3 +739,90 @@ func _duplicate_dictionary(value: Variant) -> Dictionary:
 
 func _url_encode(value: String) -> String:
 	return value.uri_encode()
+
+
+class PersistlyMemoryAutosaveDraftStore:
+	var _drafts: Dictionary = {}
+
+	func store_draft(draft: Dictionary) -> void:
+		_drafts[String(draft.get("characterSaveId", ""))] = draft.duplicate(true)
+
+	func load_draft(character_save_id: String) -> Dictionary:
+		if not _drafts.has(character_save_id):
+			return {}
+		return (_drafts[character_save_id] as Dictionary).duplicate(true)
+
+	func clear_draft(character_save_id: String) -> void:
+		_drafts.erase(character_save_id)
+
+
+class PersistlyFileAutosaveDraftStore:
+	var root_path: String
+
+	func _init(root_path_value: String = "user://persistly_autosave") -> void:
+		root_path = root_path_value.rstrip("/")
+		DirAccess.make_dir_recursive_absolute(root_path)
+
+	func store_draft(draft: Dictionary) -> void:
+		var character_save_id := String(draft.get("characterSaveId", ""))
+		if character_save_id.is_empty():
+			return
+		var file := FileAccess.open(_draft_path(character_save_id), FileAccess.WRITE)
+		if file != null:
+			file.store_string(JSON.stringify(draft))
+			file.close()
+
+	func load_draft(character_save_id: String) -> Dictionary:
+		var path := _draft_path(character_save_id)
+		if not FileAccess.file_exists(path):
+			return {}
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+		if typeof(parsed) != TYPE_DICTIONARY:
+			return {}
+		return (parsed as Dictionary).duplicate(true)
+
+	func clear_draft(character_save_id: String) -> void:
+		var path := _draft_path(character_save_id)
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
+
+	func _draft_path(character_save_id: String) -> String:
+		return root_path.path_join(character_save_id.uri_encode() + ".json")
+
+
+class PersistlyAutosaveManager:
+	var draft_store: Variant
+	var sync_policy: Dictionary
+	var _last_remote_sync_msec: Dictionary = {}
+
+	func _init(draft_store_value: Variant, sync_policy_value: Dictionary) -> void:
+		draft_store = draft_store_value
+		sync_policy = sync_policy_value.duplicate(true)
+
+	func record_local_change(profile_save_id: String, profile_session_token: String, character_save_id: String, metadata: Dictionary, state: Dictionary, base_version: Variant = null) -> Dictionary:
+		var draft := {
+			"profileSaveId": profile_save_id,
+			"profileSessionToken": profile_session_token,
+			"characterSaveId": character_save_id,
+			"metadata": metadata.duplicate(true),
+			"state": state.duplicate(true),
+			"baseVersion": base_version,
+			"updatedAtMsec": Time.get_ticks_msec(),
+		}
+		draft_store.store_draft(draft)
+		return draft
+
+	func should_sync_remote(character_save_id: String, force: bool = false) -> bool:
+		if draft_store.load_draft(character_save_id).is_empty():
+			return false
+		if not _last_remote_sync_msec.has(character_save_id):
+			return true
+
+		var elapsed_seconds := float(Time.get_ticks_msec() - int(_last_remote_sync_msec[character_save_id])) / 1000.0
+		if force:
+			return elapsed_seconds >= float(sync_policy.get("forceSyncCooldownSeconds", 10))
+		return elapsed_seconds >= float(sync_policy.get("minRemoteSyncIntervalSeconds", 60))
+
+	func mark_remote_synced(character_save_id: String) -> void:
+		_last_remote_sync_msec[character_save_id] = Time.get_ticks_msec()
+		draft_store.clear_draft(character_save_id)

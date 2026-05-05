@@ -1,15 +1,15 @@
 # Persistly Godot SDK
 
-Godot runtime SDK for Persistly profile saves, profile sessions, character save-sync, and local autosave support.
+Godot runtime SDK for Persistly game-friendly slot saves, profile saves, profile sessions, character save-sync, and local autosave support.
 
 Persistly is a lightweight cloud save backend for games. The recommended Godot flow is:
 
-1. Create a profile with the first character.
-2. Persist `profileSaveId`, `profileSessionToken`, and character `saveId` locally.
-3. Load and sync characters through the profile session.
-4. Keep gameplay state local first, then sync remotely at safe intervals or on explicit player action.
+1. Start with `PersistlyGameSaves` and named slots such as `autosave`.
+2. Save gameplay state locally first.
+3. Load by slot key when the game resumes.
+4. Force sync at safe moments or on explicit player action.
 
-Raw `create_save`, `load_save`, and `sync_save` remain available for advanced migrations, but new games should start with profile sessions.
+Raw `PersistlyClient` profile and save APIs remain available for advanced runtime integrations and migrations.
 
 ## Install
 
@@ -29,6 +29,26 @@ https://github.com/Persistly/persistly-sdk-godot
 ```
 
 ## Quickstart
+
+```gdscript
+const PersistlyGameSaves := preload("res://addons/persistly/persistly_game_saves.gd")
+
+var persistly := PersistlyGameSaves.new()
+persistly.configure({
+	"runtime_key": "ps_test_replace_me",
+	"sync_interval_seconds": 40,
+})
+
+await persistly.save_slot("autosave", {"level": 5, "coins": 1200})
+var loaded := await persistly.load_slot("autosave")
+await persistly.force_sync("autosave")
+```
+
+`PersistlyGameSaves` stores slot state locally first. This initial facade keeps remote profile sync unwired; `force_sync` is present so games can wire the same call site now and gain remote behavior later.
+
+## Advanced Runtime Client
+
+Use `PersistlyClient` directly when you need profile sessions, character save IDs, raw save migration, or lower-level conflict handling.
 
 ```gdscript
 const PersistlyClient := preload("res://addons/persistly/persistly_client.gd")
@@ -84,6 +104,15 @@ if synced.get("status", "") == "conflict":
 
 The package includes:
 
+- `PersistlyGameSaves`
+- `PersistlySlotStatus`
+- `configure`
+- `save_slot`
+- `load_slot`
+- `force_sync`
+- `accept_cloud_version`
+- `overwrite_cloud_version`
+- `keep_local_for_later`
 - `create_profile`
 - `load_profile`
 - `create_profile_character`
@@ -122,6 +151,7 @@ The bundle is authoritative for request/response semantics, routes, and runtime 
 ## Validation
 
 ```bash
+/Applications/Godot.app/Contents/MacOS/Godot --headless --script scripts/validate_game_saves.gd
 /Applications/Godot.app/Contents/MacOS/Godot --headless --script scripts/validate_contract.gd
 /Applications/Godot.app/Contents/MacOS/Godot --headless --script scripts/validate_client.gd
 ```

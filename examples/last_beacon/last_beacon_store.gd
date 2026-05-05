@@ -49,7 +49,9 @@ func reset() -> void:
 func _default_profile() -> Dictionary:
 	return {
 		"config": {},
-		"saveId": "",
+		"profileSaveId": "",
+		"profileSessionToken": "",
+		"characterSaveId": "",
 		"version": 0,
 		"state": {},
 	}
@@ -59,8 +61,12 @@ func _normalize_profile(profile: Dictionary) -> Dictionary:
 	var normalized := _default_profile()
 	if typeof(profile.get("config", {})) == TYPE_DICTIONARY:
 		normalized["config"] = (profile.get("config", {}) as Dictionary).duplicate(true)
-	if typeof(profile.get("saveId", "")) == TYPE_STRING:
-		normalized["saveId"] = String(profile.get("saveId", ""))
+	if typeof(profile.get("profileSaveId", "")) == TYPE_STRING:
+		normalized["profileSaveId"] = String(profile.get("profileSaveId", ""))
+	if typeof(profile.get("profileSessionToken", "")) == TYPE_STRING:
+		normalized["profileSessionToken"] = String(profile.get("profileSessionToken", ""))
+	if typeof(profile.get("characterSaveId", "")) == TYPE_STRING:
+		normalized["characterSaveId"] = String(profile.get("characterSaveId", ""))
 	var version_value = profile.get("version", 0)
 	if typeof(version_value) == TYPE_INT or typeof(version_value) == TYPE_FLOAT:
 		normalized["version"] = int(profile.get("version", 0))

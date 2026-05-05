@@ -16,6 +16,7 @@ func _initialize() -> void:
 	_check_not_configured(game_saves_script)
 	_check_configured_local_slot_flow(game_saves_script)
 	_check_force_sync_exists(game_saves_script)
+	_check_conflict_helpers(game_saves_script)
 	_finish()
 
 
@@ -87,17 +88,43 @@ func _check_force_sync_exists(game_saves_script: Script) -> void:
 	})
 
 	var result: Dictionary = persistly.force_sync("autosave")
-	var valid_statuses := [
-		"synced",
-		"local_saved",
-		"offline",
-		"rate_limited",
-		"conflict",
-		"not_found",
-		"not_configured",
-	]
-	if not valid_statuses.has(result.get("status", "")):
-		_fail("force_sync should return a valid slot result status.")
+	_expect_equal(result.get("status", ""), "local_saved", "force_sync status")
+	_expect_dictionary(result.get("sync", {}), {
+		"remoteAttempted": false,
+		"reason": "remote_profile_sync_not_wired",
+	}, "force_sync sync metadata")
+
+
+func _check_conflict_helpers(game_saves_script: Script) -> void:
+	var persistly: Object = game_saves_script.new()
+	persistly.configure({
+		"runtime_key": "ps_test_replace_me",
+	})
+	persistly.save_slot("autosave", {
+		"level": 5,
+	}, {
+		"scene": "local",
+	})
+
+	var invalid_accept: Dictionary = persistly.accept_cloud_version("autosave")
+	_expect_equal(invalid_accept.get("status", ""), "invalid_request", "accept_cloud_version without conflict status")
+
+	persistly._slots["autosave"]["conflict"] = {
+		"cloudState": {
+			"level": 8,
+		},
+		"cloudMetadata": {
+			"scene": "cloud",
+		},
+	}
+	var accepted: Dictionary = persistly.accept_cloud_version("autosave")
+	_expect_equal(accepted.get("status", ""), "synced", "accept_cloud_version with conflict status")
+	_expect_dictionary(accepted.get("state", {}), {
+		"level": 8,
+	}, "accept_cloud_version state")
+	_expect_dictionary(accepted.get("metadata", {}), {
+		"scene": "cloud",
+	}, "accept_cloud_version metadata")
 
 
 func _expect_equal(actual: Variant, expected: Variant, label: String) -> void:

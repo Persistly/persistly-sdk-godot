@@ -99,9 +99,21 @@ func accept_cloud_version(slot_key: String) -> Dictionary:
 		return slot
 
 	var conflict = slot.get("conflict", {})
-	if typeof(conflict) == TYPE_DICTIONARY and typeof(conflict.get("cloudState", null)) == TYPE_DICTIONARY:
+	if typeof(conflict) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "accept_cloud_version requires an active conflict for slot " + slot_key + ".", {
+			"slotKey": slot_key,
+		})
+
+	var has_cloud_state := typeof(conflict.get("cloudState", null)) == TYPE_DICTIONARY
+	var has_cloud_metadata := typeof(conflict.get("cloudMetadata", null)) == TYPE_DICTIONARY
+	if not has_cloud_state and not has_cloud_metadata:
+		return _error_result(ERROR_INVALID_REQUEST, "accept_cloud_version requires conflict cloud state or metadata for slot " + slot_key + ".", {
+			"slotKey": slot_key,
+		})
+
+	if has_cloud_state:
 		slot["state"] = (conflict["cloudState"] as Dictionary).duplicate(true)
-	if typeof(conflict) == TYPE_DICTIONARY and typeof(conflict.get("cloudMetadata", null)) == TYPE_DICTIONARY:
+	if has_cloud_metadata:
 		slot["metadata"] = (conflict["cloudMetadata"] as Dictionary).duplicate(true)
 	slot["status"] = PersistlySlotStatus.SYNCED
 	slot.erase("conflict")

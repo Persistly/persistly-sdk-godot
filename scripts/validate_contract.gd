@@ -1,13 +1,18 @@
 extends SceneTree
 
-const BUNDLE_ROOT := "res://contracts/persistly-contract-v0.2.0"
-const MANIFEST_PATH := "res://contracts/persistly-contract-v0.2.0/manifest.json"
+const BUNDLE_ROOT := "res://contracts/persistly-contract-v0.3.0"
+const MANIFEST_PATH := "res://contracts/persistly-contract-v0.3.0/manifest.json"
 
 
 func _initialize() -> void:
 	var manifest := _read_json_file(MANIFEST_PATH)
 	if manifest.is_empty():
 		push_error("Persistly contract bundle validation failed: manifest could not be read.")
+		quit(1)
+		return
+
+	if manifest.get("bundle", "") != "persistly-contract-v0.3.0":
+		push_error("Persistly contract bundle validation failed: expected persistly-contract-v0.3.0.")
 		quit(1)
 		return
 

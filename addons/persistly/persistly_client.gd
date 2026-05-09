@@ -1,9 +1,9 @@
 extends RefCounted
 class_name PersistlyClient
 
-const SDK_VERSION := "0.9.1"
-const BUNDLE_VERSION := "persistly-contract-v0.2.0"
-const BUNDLE_ROOT := "res://contracts/persistly-contract-v0.2.0"
+const SDK_VERSION := "0.10.0"
+const BUNDLE_VERSION := "persistly-contract-v0.3.0"
+const BUNDLE_ROOT := "res://contracts/persistly-contract-v0.3.0"
 const DEFAULT_BASE_URL := "https://api.persistly.app"
 const DEFAULT_TIMEOUT_SECONDS := 30.0
 const METADATA_MAX_BYTES := 16384
@@ -14,6 +14,8 @@ const ERROR_UNAUTHORIZED := "unauthorized"
 const ERROR_FORBIDDEN := "forbidden"
 const ERROR_NOT_FOUND := "not_found"
 const ERROR_CONFLICT := "conflict"
+const ERROR_SLOT_ALREADY_EXISTS := "slot_already_exists"
+const ERROR_CHARACTER_ARCHIVED := "character_archived"
 const ERROR_RATE_LIMITED := "rate_limited"
 const ERROR_PAYLOAD_TOO_LARGE := "payload_too_large"
 const ERROR_SERVER := "server_error"
@@ -24,6 +26,7 @@ var timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
 
 var _save_cache: Dictionary = {}
 var _fixture_responses: Dictionary = {}
+var _recorded_requests: Array = []
 
 
 func _init(base_url_value: String = DEFAULT_BASE_URL, runtime_key_value: String = "", timeout_seconds_value: float = DEFAULT_TIMEOUT_SECONDS) -> void:
@@ -105,7 +108,7 @@ func sync_save(save_id: String, payload: Dictionary) -> Dictionary:
 	if typeof(metadata) != TYPE_DICTIONARY:
 		return _error_result(ERROR_INVALID_REQUEST, "sync_save metadata must be a dictionary when provided.")
 
-	var base_version := payload.get("baseVersion", null)
+	var base_version = payload.get("baseVersion", null)
 	if base_version == null and _save_cache.has(save_id):
 		base_version = int(_save_cache[save_id].get("version", 0))
 	if base_version == null:
@@ -126,52 +129,28 @@ func sync_save(save_id: String, payload: Dictionary) -> Dictionary:
 	if response.has("error"):
 		return response
 
-	var status = String(response.get("status", ""))
-	if status != "accepted" and status != "conflict":
-		return _error_result(ERROR_SERVER, "sync_save returned an unexpected status.")
-
-	var normalized := _normalize_save_envelope(response, true)
-	if normalized.has("error"):
-		return normalized
-
-	if status == "conflict":
-		var details = normalized.get("details", {})
-		if typeof(details) != TYPE_DICTIONARY or String(details.get("reason", "")) != "base_version_mismatch":
-			return _error_result(ERROR_SERVER, "sync_save conflict response is missing a valid reason.")
-
-	return normalized
+	return _normalize_sync_response(response, true, "sync_save")
 
 
-func create_profile(payload: Dictionary) -> Dictionary:
+func create_profile(payload: Dictionary = {}) -> Dictionary:
 	var preflight := _validate_runtime_configuration("create_profile")
 	if not preflight.is_empty():
 		return preflight
 
 	var account_data := payload.get("accountData", {})
 	var profile_metadata := payload.get("profileMetadata", {})
-	var character_metadata := payload.get("characterMetadata", {})
-	var character_state := payload.get("characterState", null)
 	if typeof(account_data) != TYPE_DICTIONARY:
 		return _error_result(ERROR_INVALID_REQUEST, "create_profile accountData must be a dictionary.")
 	if typeof(profile_metadata) != TYPE_DICTIONARY:
 		return _error_result(ERROR_INVALID_REQUEST, "create_profile profileMetadata must be a dictionary when provided.")
-	if typeof(character_metadata) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, "create_profile characterMetadata must be a dictionary.")
-	if typeof(character_state) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, "create_profile requires a dictionary characterState payload.")
 
 	var profile_payload_error := _validate_payload_sizes(profile_metadata, account_data)
 	if not profile_payload_error.is_empty():
 		return profile_payload_error
-	var character_payload_error := _validate_payload_sizes(character_metadata, character_state)
-	if not character_payload_error.is_empty():
-		return character_payload_error
 
 	var request_body: Dictionary = {
 		"accountData": account_data,
 		"profileMetadata": profile_metadata,
-		"characterMetadata": character_metadata,
-		"characterState": character_state,
 	}
 	if payload.has("playerRef"):
 		var player_ref = payload.get("playerRef")
@@ -184,11 +163,23 @@ func create_profile(payload: Dictionary) -> Dictionary:
 			return _error_result(ERROR_INVALID_REQUEST, "externalProfileRef must be a dictionary or null.")
 		request_body["externalProfileRef"] = external_profile_ref
 
+	if payload.has("characterState") or payload.has("characterMetadata"):
+		return _error_result(ERROR_INVALID_REQUEST, "create_profile accepts character.metadata and character.state; characterState and characterMetadata are not supported.")
+
+	var character = payload.get("character", null)
+	if character != null:
+		if typeof(character) != TYPE_DICTIONARY:
+			return _error_result(ERROR_INVALID_REQUEST, "create_profile character must be a dictionary when provided.")
+		var character_request := _normalize_character_request(character, "create_profile")
+		if character_request.has("error"):
+			return character_request
+		request_body["character"] = character_request
+
 	var response := _request_json("POST", "/api/v1/profiles", request_body)
 	if response.has("error"):
 		return response
 
-	return _normalize_create_profile_response(response, true)
+	return _normalize_profile_response(response, true, true)
 
 
 func load_profile(profile_save_id: String, profile_session_token: String) -> Dictionary:
@@ -204,7 +195,70 @@ func load_profile(profile_save_id: String, profile_session_token: String) -> Dic
 	if response.has("error"):
 		return response
 
-	return _normalize_profile_envelope(response, true)
+	return _normalize_profile_response(response, true, false)
+
+
+func sync_profile_account_data(profile_save_id: String, profile_session_token: String, payload: Dictionary) -> Dictionary:
+	var preflight := _validate_profile_session_configuration("sync_profile_account_data", profile_save_id, profile_session_token)
+	if not preflight.is_empty():
+		return preflight
+
+	if payload.has("characterSlots") or payload.has("characters"):
+		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data cannot rewrite profile character slot refs.")
+
+	var base_version = payload.get("baseVersion", null)
+	if base_version == null and _save_cache.has(profile_save_id):
+		base_version = int(_save_cache[profile_save_id].get("version", 0))
+	if base_version == null:
+		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data requires baseVersion unless the profile is already cached.")
+	if typeof(base_version) != TYPE_INT:
+		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data baseVersion must be an integer.")
+
+	var has_account_data := payload.has("accountData")
+	var has_account_data_patch := payload.has("accountDataPatch")
+	var has_metadata := payload.has("metadata")
+	if has_account_data and has_account_data_patch:
+		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data accepts accountData or accountDataPatch, not both.")
+	if not has_account_data and not has_account_data_patch and not has_metadata:
+		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data requires accountData, accountDataPatch, or metadata.")
+
+	var request_body: Dictionary = {
+		"baseVersion": base_version,
+	}
+	if has_account_data:
+		var account_data = payload["accountData"]
+		if typeof(account_data) != TYPE_DICTIONARY:
+			return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data accountData must be a dictionary.")
+		var payload_error := _validate_payload_sizes({}, account_data)
+		if not payload_error.is_empty():
+			return payload_error
+		request_body["accountData"] = account_data
+	if has_account_data_patch:
+		var account_data_patch = payload["accountDataPatch"]
+		if typeof(account_data_patch) != TYPE_DICTIONARY:
+			return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data accountDataPatch must be a dictionary.")
+		var patch_error := _validate_payload_sizes({}, account_data_patch)
+		if not patch_error.is_empty():
+			return patch_error
+		request_body["accountDataPatch"] = account_data_patch
+	if has_metadata:
+		var metadata = payload["metadata"]
+		if not (typeof(metadata) == TYPE_DICTIONARY or metadata == null):
+			return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data metadata must be a dictionary or null.")
+		var metadata_error := _validate_payload_sizes({} if metadata == null else metadata, {})
+		if not metadata_error.is_empty():
+			return metadata_error
+		request_body["metadata"] = metadata
+
+	var response := _request_json(
+		"POST",
+		"/api/v1/profiles/" + _url_encode(profile_save_id) + "/account-data/sync",
+		request_body,
+		profile_session_token)
+	if response.has("error"):
+		return response
+
+	return _normalize_sync_response(response, true, "sync_profile_account_data")
 
 
 func create_profile_character(profile_save_id: String, profile_session_token: String, payload: Dictionary) -> Dictionary:
@@ -212,29 +266,19 @@ func create_profile_character(profile_save_id: String, profile_session_token: St
 	if not preflight.is_empty():
 		return preflight
 
-	var character_metadata := payload.get("characterMetadata", {})
-	var character_state := payload.get("characterState", null)
-	if typeof(character_metadata) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, "create_profile_character characterMetadata must be a dictionary.")
-	if typeof(character_state) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, "create_profile_character requires a dictionary characterState payload.")
-
-	var payload_error := _validate_payload_sizes(character_metadata, character_state)
-	if not payload_error.is_empty():
-		return payload_error
+	var character_request := _normalize_character_request(payload, "create_profile_character")
+	if character_request.has("error"):
+		return character_request
 
 	var response := _request_json(
 		"POST",
 		"/api/v1/profiles/" + _url_encode(profile_save_id) + "/characters",
-		{
-			"characterMetadata": character_metadata,
-			"characterState": character_state,
-		},
+		character_request,
 		profile_session_token)
 	if response.has("error"):
 		return response
 
-	return _normalize_character_envelope(response, true)
+	return _normalize_profile_response(response, true, false)
 
 
 func load_profile_character(profile_save_id: String, profile_session_token: String, character_save_id: String) -> Dictionary:
@@ -268,8 +312,11 @@ func sync_profile_character(profile_save_id: String, profile_session_token: Stri
 	var metadata := payload.get("metadata", {})
 	if typeof(metadata) != TYPE_DICTIONARY:
 		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_character metadata must be a dictionary when provided.")
+	var metadata_error := _validate_character_metadata(metadata, "sync_profile_character")
+	if not metadata_error.is_empty():
+		return metadata_error
 
-	var base_version := payload.get("baseVersion", null)
+	var base_version = payload.get("baseVersion", null)
 	if base_version == null and _save_cache.has(character_save_id):
 		base_version = int(_save_cache[character_save_id].get("version", 0))
 	if base_version == null:
@@ -294,6 +341,24 @@ func sync_profile_character(profile_save_id: String, profile_session_token: Stri
 		return response
 
 	return _normalize_sync_response(response, true, "sync_profile_character")
+
+
+func archive_profile_character(profile_save_id: String, profile_session_token: String, character_save_id: String) -> Dictionary:
+	var preflight := _validate_profile_session_configuration("archive_profile_character", profile_save_id, profile_session_token)
+	if not preflight.is_empty():
+		return preflight
+	if character_save_id.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "archive_profile_character requires a non-empty character_save_id.")
+
+	var response := _request_json(
+		"POST",
+		"/api/v1/profiles/" + _url_encode(profile_save_id) + "/characters/" + _url_encode(character_save_id) + "/archive",
+		null,
+		profile_session_token)
+	if response.has("error"):
+		return response
+
+	return _normalize_profile_response(response, true, false)
 
 
 func get_runtime_config() -> Dictionary:
@@ -338,6 +403,62 @@ func clear_fixture_responses() -> void:
 	_fixture_responses.clear()
 
 
+func get_recorded_requests() -> Array:
+	return _recorded_requests.duplicate(true)
+
+
+func clear_recorded_requests() -> void:
+	_recorded_requests.clear()
+
+
+func _normalize_character_request(payload: Dictionary, action: String) -> Dictionary:
+	var metadata := payload.get("metadata", {})
+	var state = payload.get("state", null)
+	if typeof(metadata) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, action + " character metadata must be a dictionary.")
+	if typeof(state) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, action + " requires a dictionary character state payload.")
+
+	var metadata_error := _validate_character_metadata(metadata, action)
+	if not metadata_error.is_empty():
+		return metadata_error
+	var payload_error := _validate_payload_sizes(metadata, state)
+	if not payload_error.is_empty():
+		return payload_error
+	return {
+		"metadata": metadata,
+		"state": state,
+	}
+
+
+func _validate_character_metadata(metadata: Dictionary, action: String) -> Dictionary:
+	var persistly_metadata = metadata.get("_persistly", null)
+	if typeof(persistly_metadata) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, action + " metadata._persistly.slotKey is required.")
+	var slot_key := String((persistly_metadata as Dictionary).get("slotKey", ""))
+	if not _is_valid_slot_key(slot_key):
+		return _error_result(ERROR_INVALID_REQUEST, action + " metadata._persistly.slotKey must match ^[A-Za-z0-9_.-]{1,64}$.", {
+			"slotKey": slot_key,
+		})
+	if (persistly_metadata as Dictionary).size() != 1:
+		return _error_result(ERROR_INVALID_REQUEST, action + " metadata._persistly may only contain the SDK-owned slotKey.")
+	return {}
+
+
+func _is_valid_slot_key(slot_key: String) -> bool:
+	if slot_key.length() < 1 or slot_key.length() > 64:
+		return false
+	for index in range(slot_key.length()):
+		var code := slot_key.unicode_at(index)
+		var is_digit := code >= 48 and code <= 57
+		var is_upper := code >= 65 and code <= 90
+		var is_lower := code >= 97 and code <= 122
+		var is_symbol := code == 45 or code == 46 or code == 95
+		if not (is_digit or is_upper or is_lower or is_symbol):
+			return false
+	return true
+
+
 func _validate_runtime_configuration(action: String) -> Dictionary:
 	if base_url.is_empty():
 		return _error_result(ERROR_INVALID_REQUEST, "PersistlyClient requires base_url before calling " + action + ".")
@@ -363,6 +484,7 @@ func _normalize_base_url(value: String) -> String:
 
 
 func _request_json(method: String, path: String, body: Variant = null, profile_session_token: String = "") -> Dictionary:
+	_record_request(method, path, body, profile_session_token)
 	var fixture := _pop_fixture_response(method, path)
 	if not fixture.is_empty():
 		return _parse_transport_response(int(fixture.get("status_code", 500)), String(fixture.get("body", "")))
@@ -412,6 +534,18 @@ func _request_json(method: String, path: String, body: Variant = null, profile_s
 	var response := _read_response(client)
 	client.close()
 	return response
+
+
+func _record_request(method: String, path: String, body: Variant, profile_session_token: String) -> void:
+	var recorded_body = body
+	if typeof(body) == TYPE_DICTIONARY or typeof(body) == TYPE_ARRAY:
+		recorded_body = body.duplicate(true)
+	_recorded_requests.append({
+		"method": method.to_upper(),
+		"path": path,
+		"body": recorded_body,
+		"profileSessionToken": profile_session_token,
+	})
 
 
 func _parse_base_url() -> Dictionary:
@@ -519,7 +653,7 @@ func _parse_transport_response(status_code: int, body_text: String) -> Dictionar
 		if parsed_dict.get("status", "") == "conflict" and parsed_dict.has("save"):
 			return parsed_dict
 
-	if typeof(parsed) == TYPE_DICTIONARY and parsed.has("error"):
+	if typeof(parsed) == TYPE_DICTIONARY and (parsed as Dictionary).has("error"):
 		return parsed
 
 	var error_code := _error_code_for_status(status_code)
@@ -535,7 +669,74 @@ func _normalize_save_envelope(response: Dictionary, cache_result: bool) -> Dicti
 	var save = response["save"]
 	if typeof(save) != TYPE_DICTIONARY:
 		return _error_result(ERROR_SERVER, "Persistly save payload must be a dictionary.")
+	var normalized_save := _normalize_save(save, cache_result)
+	if normalized_save.has("error"):
+		return normalized_save
+	var normalized := _copy_response_extras(response, ["save"])
+	normalized["save"] = normalized_save
+	return normalized
 
+
+func _normalize_sync_response(response: Dictionary, cache_result: bool, label: String) -> Dictionary:
+	var status = String(response.get("status", ""))
+	if status != "accepted" and status != "conflict":
+		return _error_result(ERROR_SERVER, label + " returned an unexpected status.")
+
+	var normalized := _normalize_save_envelope(response, cache_result)
+	if normalized.has("error"):
+		return normalized
+
+	if status == "conflict":
+		var details = normalized.get("details", {})
+		if typeof(details) != TYPE_DICTIONARY or String(details.get("reason", "")) != "base_version_mismatch":
+			return _error_result(ERROR_SERVER, label + " conflict response is missing a valid reason.")
+
+	normalized["status"] = status
+	return normalized
+
+
+func _normalize_profile_response(response: Dictionary, cache_result: bool, require_session_token: bool) -> Dictionary:
+	if typeof(response.get("profileSaveId", null)) != TYPE_STRING or String(response.get("profileSaveId", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly profile response is missing profileSaveId.")
+	if require_session_token and (typeof(response.get("profileSessionToken", null)) != TYPE_STRING or String(response.get("profileSessionToken", "")).is_empty()):
+		return _error_result(ERROR_SERVER, "Persistly profile response is missing profileSessionToken.")
+	if typeof(response.get("profile", null)) != TYPE_DICTIONARY:
+		return _error_result(ERROR_SERVER, "Persistly profile response is missing profile.")
+
+	var profile := _normalize_save(response["profile"], cache_result)
+	if profile.has("error"):
+		return profile
+	var profile_state = profile.get("state", {})
+	if typeof(profile_state) != TYPE_DICTIONARY:
+		return _error_result(ERROR_SERVER, "Persistly profile state must be a dictionary.")
+	if profile_state.get("schema", "") != "persistly.profile.v1":
+		return _error_result(ERROR_SERVER, "Persistly profile state has an unsupported schema.")
+	if typeof(profile_state.get("accountData", null)) != TYPE_DICTIONARY:
+		return _error_result(ERROR_SERVER, "Persistly profile state is missing accountData.")
+	if typeof(profile_state.get("characterSlots", null)) != TYPE_ARRAY:
+		return _error_result(ERROR_SERVER, "Persistly profile state is missing characterSlots.")
+
+	var normalized: Dictionary = {
+		"profileSaveId": String(response["profileSaveId"]),
+		"profile": profile,
+	}
+	if response.has("profileSessionToken"):
+		normalized["profileSessionToken"] = String(response["profileSessionToken"])
+	if response.has("syncPolicy"):
+		if typeof(response["syncPolicy"]) != TYPE_DICTIONARY:
+			return _error_result(ERROR_SERVER, "Persistly profile response syncPolicy must be a dictionary.")
+		normalized["syncPolicy"] = (response["syncPolicy"] as Dictionary).duplicate(true)
+	if response.has("character"):
+		if typeof(response["character"]) != TYPE_DICTIONARY:
+			return _error_result(ERROR_SERVER, "Persistly profile response character must be a dictionary.")
+		var character := _normalize_save(response["character"], cache_result)
+		if character.has("error"):
+			return character
+		normalized["character"] = character
+	return normalized
+
+
+func _normalize_save(save: Dictionary, cache_result: bool) -> Dictionary:
 	var required_keys := [
 		"saveId",
 		"playerRef",
@@ -562,85 +763,19 @@ func _normalize_save_envelope(response: Dictionary, cache_result: bool) -> Dicti
 	if typeof(save["createdAt"]) != TYPE_STRING or typeof(save["updatedAt"]) != TYPE_STRING:
 		return _error_result(ERROR_SERVER, "Persistly save payload timestamps must be strings.")
 
-	var normalized := _duplicate_dictionary(response)
 	var normalized_save := _duplicate_dictionary(save)
 	normalized_save["version"] = int(save["version"])
-	normalized["save"] = normalized_save
 	if cache_result:
 		_save_cache[String(save["saveId"])] = normalized_save.duplicate(true)
-	return normalized
+	return normalized_save
 
 
-func _normalize_sync_response(response: Dictionary, cache_result: bool, label: String) -> Dictionary:
-	var status = String(response.get("status", ""))
-	if status != "accepted" and status != "conflict":
-		return _error_result(ERROR_SERVER, label + " returned an unexpected status.")
-
-	var normalized := _normalize_save_envelope(response, cache_result)
-	if normalized.has("error"):
-		return normalized
-
-	if status == "conflict":
-		var details = normalized.get("details", {})
-		if typeof(details) != TYPE_DICTIONARY or String(details.get("reason", "")) != "base_version_mismatch":
-			return _error_result(ERROR_SERVER, label + " conflict response is missing a valid reason.")
-
-	return normalized
-
-
-func _normalize_create_profile_response(response: Dictionary, cache_result: bool) -> Dictionary:
-	if typeof(response.get("profile", null)) != TYPE_DICTIONARY:
-		return _error_result(ERROR_SERVER, "create_profile response is missing profile.")
-	if typeof(response.get("character", null)) != TYPE_DICTIONARY:
-		return _error_result(ERROR_SERVER, "create_profile response is missing character.")
-
-	var profile := _normalize_profile_envelope(response["profile"], cache_result)
-	if profile.has("error"):
-		return profile
-	var character := _normalize_character_envelope(response["character"], cache_result)
-	if character.has("error"):
-		return character
-
-	return {
-		"profile": profile,
-		"character": character,
-	}
-
-
-func _normalize_profile_envelope(response: Dictionary, cache_result: bool) -> Dictionary:
-	var envelope := response
-	if typeof(response.get("profile", null)) == TYPE_DICTIONARY:
-		envelope = response["profile"]
-
-	if typeof(envelope.get("profileSaveId", null)) != TYPE_STRING or String(envelope.get("profileSaveId", "")).is_empty():
-		return _error_result(ERROR_SERVER, "Persistly profile envelope is missing profileSaveId.")
-	if typeof(envelope.get("profileSessionToken", null)) != TYPE_STRING or String(envelope.get("profileSessionToken", "")).is_empty():
-		return _error_result(ERROR_SERVER, "Persistly profile envelope is missing profileSessionToken.")
-	if typeof(envelope.get("save", null)) != TYPE_DICTIONARY:
-		return _error_result(ERROR_SERVER, "Persistly profile envelope is missing save.")
-
-	var normalized_save := _normalize_save_envelope({"save": envelope["save"]}, cache_result)
-	if normalized_save.has("error"):
-		return normalized_save
-
-	var normalized := _duplicate_dictionary(envelope)
-	normalized["save"] = normalized_save["save"]
-	return normalized
-
-
-func _normalize_character_envelope(response: Dictionary, cache_result: bool) -> Dictionary:
-	var envelope := response
-	if typeof(response.get("character", null)) == TYPE_DICTIONARY:
-		envelope = response["character"]
-	if typeof(envelope.get("save", null)) != TYPE_DICTIONARY:
-		return _error_result(ERROR_SERVER, "Persistly character envelope is missing save.")
-
-	var normalized_save := _normalize_save_envelope({"save": envelope["save"]}, cache_result)
-	if normalized_save.has("error"):
-		return normalized_save
-	return {
-		"save": normalized_save["save"],
-	}
+func _copy_response_extras(response: Dictionary, excluded_keys: Array[String]) -> Dictionary:
+	var extras := {}
+	for key in response.keys():
+		if not excluded_keys.has(String(key)):
+			extras[key] = response[key]
+	return extras
 
 
 func _error_result(code: String, message: String, details: Dictionary = {}) -> Dictionary:

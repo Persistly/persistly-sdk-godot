@@ -9,8 +9,8 @@ It is an endless idle outpost demo with:
 - passive scrap generation every second
 - manual gather actions
 - worker and core upgrades
-- persisted local profile/config under `user://last_beacon_profile.json`
-- explicit Persistly profile/session create/load/sync wiring through the Godot SDK
+- persisted local profile/config under `user://`
+- facade-first Persistly slot saves through `PersistlyGameSaves`
 
 To run it:
 
@@ -25,13 +25,13 @@ Inside the game:
 2. Paste a `ps_test_...` runtime key from the Persistly dashboard.
 3. Optionally fill `Player reference`, `Character Name`, and `Slot Label`.
 4. Press `Connect / Resume Remote Save`.
-5. Play the idle loop and use `Sync Now` to push canonical state to Persistly.
+5. Play the idle loop and use `Sync Now` to push the `autosave` slot to Persistly.
 
 For explicit local development against a local API, override the base URL manually in the sample UI.
 
 What it proves:
 
 - local idle state can resume between launches
-- the game can create a new Persistly profile and first character from inside Godot
-- the game can reload an existing character through `profileSaveId`, `profileSessionToken`, and character `saveId`
-- the game can sync canonical character state and keep version tracking visible
+- a Godot game can save and load local slot state first
+- the SDK can create a Persistly profile lazily and sync a named character slot
+- explicit `profileSaveId` plus `profileSessionToken` is the restore path; `playerRef` and `externalProfileRef` are references only, not lookup APIs

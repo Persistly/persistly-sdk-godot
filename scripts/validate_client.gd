@@ -93,69 +93,154 @@ const SYNC_CONFLICT_RESPONSE := {
 	},
 }
 
-const CREATE_PROFILE_PAYLOAD := {
+const PROFILE_SAVE := {
+	"saveId": "sv_profile",
 	"playerRef": "player-184",
-	"profileMetadata": {
+	"metadata": {
 		"displayName": "Ayla",
 	},
-	"accountData": {
-		"diamonds": 20,
+	"state": {
+		"schema": "persistly.profile.v1",
+		"accountData": {
+			"diamonds": 20,
+		},
+		"characterSlots": [],
 	},
-	"characterMetadata": {
-		"slot": 1,
+	"version": 1,
+	"createdAt": "2026-04-09T10:00:00Z",
+	"updatedAt": "2026-04-09T10:00:00Z",
+}
+
+const CHARACTER_SAVE := {
+	"saveId": "sv_char",
+	"playerRef": "player-184",
+	"metadata": {
+		"_persistly": {
+			"slotKey": "autosave",
+		},
 		"name": "Ayla",
 	},
-	"characterState": {
+	"state": {
 		"gold": 100,
 		"level": 1,
 	},
+	"version": 1,
+	"createdAt": "2026-04-09T10:00:00Z",
+	"updatedAt": "2026-04-09T10:00:00Z",
+}
+
+const PROFILE_WITH_CHARACTER_SAVE := {
+	"saveId": "sv_profile",
+	"playerRef": "player-184",
+	"metadata": {
+		"displayName": "Ayla",
+	},
+	"state": {
+		"schema": "persistly.profile.v1",
+		"accountData": {
+			"diamonds": 20,
+		},
+		"characterSlots": [
+			{
+				"slotKey": "autosave",
+				"characterSaveId": "sv_char",
+				"metadata": {
+					"name": "Ayla",
+				},
+			},
+		],
+	},
+	"version": 2,
+	"createdAt": "2026-04-09T10:00:00Z",
+	"updatedAt": "2026-04-09T10:01:00Z",
 }
 
 const CREATE_PROFILE_RESPONSE := {
-	"profile": {
-		"profileSaveId": "sv_profile",
-		"profileSessionToken": "pst_profile_session",
-		"save": {
-			"saveId": "sv_profile",
-			"playerRef": "player-184",
-			"metadata": {
-				"displayName": "Ayla",
-			},
-			"state": {
-				"accountData": {
-					"diamonds": 20,
-				},
-				"characters": [
-					{
-						"saveId": "sv_char",
-						"metadata": {
-							"slot": 1,
-							"name": "Ayla",
-						},
-					},
-				],
-			},
-			"version": 1,
-			"createdAt": "2026-04-09T10:00:00Z",
-			"updatedAt": "2026-04-09T10:00:00Z",
-		},
+	"profileSaveId": "sv_profile",
+	"profileSessionToken": "pst_profile_session",
+	"profile": PROFILE_SAVE,
+	"syncPolicy": {
+		"minRemoteSyncIntervalSeconds": 60,
+		"forceSyncCooldownSeconds": 10,
+		"syncOnAppBackground": true,
+		"syncOnAppForeground": true,
+		"syncOnReconnect": true,
+		"maxQueuedLocalSnapshots": 25,
 	},
-	"character": {
-		"save": {
-			"saveId": "sv_char",
-			"playerRef": "player-184",
-			"metadata": {
-				"slot": 1,
-				"name": "Ayla",
-			},
-			"state": {
-				"gold": 100,
-				"level": 1,
-			},
-			"version": 1,
-			"createdAt": "2026-04-09T10:00:00Z",
-			"updatedAt": "2026-04-09T10:00:00Z",
+}
+
+const CREATE_PROFILE_WITH_CHARACTER_RESPONSE := {
+	"profileSaveId": "sv_profile",
+	"profileSessionToken": "pst_profile_session",
+	"profile": PROFILE_WITH_CHARACTER_SAVE,
+	"character": CHARACTER_SAVE,
+	"syncPolicy": {
+		"minRemoteSyncIntervalSeconds": 60,
+		"forceSyncCooldownSeconds": 10,
+		"syncOnAppBackground": true,
+		"syncOnAppForeground": true,
+		"syncOnReconnect": true,
+		"maxQueuedLocalSnapshots": 25,
+	},
+}
+
+const ACCOUNT_DATA_SYNC_RESPONSE := {
+	"status": "accepted",
+	"save": {
+		"saveId": "sv_profile",
+		"playerRef": "player-184",
+		"metadata": {
+			"displayName": "Ayla Updated",
 		},
+		"state": {
+			"schema": "persistly.profile.v1",
+			"accountData": {
+				"diamonds": 30,
+			},
+			"characterSlots": [
+				{
+					"slotKey": "autosave",
+					"characterSaveId": "sv_char",
+					"metadata": {
+						"name": "Ayla",
+					},
+				},
+			],
+		},
+		"version": 3,
+		"createdAt": "2026-04-09T10:00:00Z",
+		"updatedAt": "2026-04-09T10:02:00Z",
+	},
+}
+
+const ARCHIVE_RESPONSE := {
+	"profileSaveId": "sv_profile",
+	"profile": {
+		"saveId": "sv_profile",
+		"playerRef": "player-184",
+		"metadata": {
+			"displayName": "Ayla",
+		},
+		"state": {
+			"schema": "persistly.profile.v1",
+			"accountData": {
+				"diamonds": 20,
+			},
+			"characterSlots": [
+				{
+					"slotKey": "autosave",
+					"characterSaveId": "sv_char",
+					"metadata": {
+						"name": "Ayla",
+					},
+					"archived": true,
+					"archivedAt": "2026-04-09T10:03:00Z",
+				},
+			],
+		},
+		"version": 4,
+		"createdAt": "2026-04-09T10:00:00Z",
+		"updatedAt": "2026-04-09T10:03:00Z",
 	},
 }
 
@@ -163,8 +248,8 @@ const RUNTIME_CONFIG_RESPONSE := {
 	"syncPolicy": {
 		"minRemoteSyncIntervalSeconds": 60,
 		"forceSyncCooldownSeconds": 10,
-		"syncOnBackground": true,
-		"syncOnForeground": true,
+		"syncOnAppBackground": true,
+		"syncOnAppForeground": true,
 		"syncOnReconnect": true,
 		"maxQueuedLocalSnapshots": 25,
 	},
@@ -183,16 +268,26 @@ func _initialize() -> void:
 	var client: Object = client_script.new(BASE_URL, RUNTIME_KEY)
 	_seed_fixture_responses(client)
 
+	_check_versions(client_script)
 	_check_create_save(client)
 	_check_load_save(client)
 	_check_sync_save(client)
-	_check_create_profile(client)
+	_check_create_profile_only(client)
+	_check_create_profile_with_character(client)
+	_check_rejects_legacy_character_aliases(client)
 	_check_profile_session_routes(client)
+	_check_account_data_sync(client)
+	_check_archive(client)
 	_check_runtime_config(client)
 	_check_autosave(client_script)
 	_check_error_mapping(client)
 	_check_cache_update(client)
 	_finish()
+
+
+func _check_versions(client_script: GDScript) -> void:
+	_expect_equal(client_script.SDK_VERSION, "0.10.0", "SDK_VERSION")
+	_expect_equal(client_script.BUNDLE_VERSION, "persistly-contract-v0.3.0", "BUNDLE_VERSION")
 
 
 func _check_create_save(client: Object) -> void:
@@ -254,36 +349,152 @@ func _check_sync_save(client: Object) -> void:
 		_fail("sync_save conflict should preserve the conflict reason.")
 
 
-func _check_create_profile(client: Object) -> void:
-	var result = client.create_profile(CREATE_PROFILE_PAYLOAD)
-	if typeof(result) != TYPE_DICTIONARY or not result.has("profile") or not result.has("character"):
-		_fail("create_profile should return profile and character envelopes.")
+func _check_create_profile_only(client: Object) -> void:
+	var result = client.create_profile({
+		"playerRef": "player-184",
+		"externalProfileRef": {
+			"provider": "auth0",
+			"subject": "auth0|user_123",
+		},
+		"profileMetadata": {
+			"displayName": "Ayla",
+		},
+		"accountData": {
+			"diamonds": 20,
+		},
+	})
+	if typeof(result) != TYPE_DICTIONARY or result.has("character"):
+		_fail("profile-only create_profile should return no character envelope.")
 		return
 
-	var profile = result["profile"]
-	if typeof(profile) != TYPE_DICTIONARY:
-		_fail("create_profile profile envelope should be a dictionary.")
+	_expect_profile(result, CREATE_PROFILE_RESPONSE, "create_profile profile-only", true)
+	var state = result["profile"].get("state", {})
+	if typeof(state) != TYPE_DICTIONARY or typeof(state.get("characterSlots", null)) != TYPE_ARRAY:
+		_fail("create_profile should parse profile.state.characterSlots.")
+	if typeof(state) == TYPE_DICTIONARY and state.has("characters"):
+		_fail("create_profile should not expose legacy profile.state.characters.")
+
+
+func _check_create_profile_with_character(client: Object) -> void:
+	var result = client.create_profile({
+		"playerRef": "player-184",
+		"profileMetadata": {
+			"displayName": "Ayla",
+		},
+		"accountData": {
+			"diamonds": 20,
+		},
+		"character": {
+			"metadata": {
+				"_persistly": {
+					"slotKey": "autosave",
+				},
+				"name": "Ayla",
+			},
+			"state": {
+				"gold": 100,
+				"level": 1,
+			},
+		},
+	})
+	if typeof(result) != TYPE_DICTIONARY or not result.has("character"):
+		_fail("create_profile with character should return a character save.")
 		return
 
-	if profile.get("profileSaveId", "") != "sv_profile":
-		_fail("create_profile should expose profileSaveId.")
-	if profile.get("profileSessionToken", "") != "pst_profile_session":
-		_fail("create_profile should expose profileSessionToken.")
-	_expect_save(profile.get("save", {}), CREATE_PROFILE_RESPONSE["profile"]["save"], "create_profile profile")
-	_expect_save(result["character"].get("save", {}), CREATE_PROFILE_RESPONSE["character"]["save"], "create_profile character")
+	_expect_profile(result, CREATE_PROFILE_WITH_CHARACTER_RESPONSE, "create_profile with character", true)
+	_expect_save(result["character"], CHARACTER_SAVE, "create_profile character")
+
+
+func _check_rejects_legacy_character_aliases(client: Object) -> void:
+	var profile_alias_result = client.create_profile({
+		"playerRef": "player-184",
+		"characterState": {
+			"level": 1,
+		},
+		"characterMetadata": {
+			"_persistly": {
+				"slotKey": "autosave",
+			},
+		},
+	})
+	_expect_error_code(profile_alias_result, "invalid_request", "create_profile should reject stale characterState/characterMetadata aliases")
+
+	var create_alias_result = client.create_profile_character("sv_profile", "pst_profile_session", {
+		"characterState": {
+			"level": 1,
+		},
+		"characterMetadata": {
+			"_persistly": {
+				"slotKey": "autosave",
+			},
+		},
+	})
+	_expect_error_code(create_alias_result, "invalid_request", "create_profile_character should reject stale characterState/characterMetadata aliases")
+
+	var sync_alias_result = client.sync_profile_character("sv_profile", "pst_profile_session", "sv_char", {
+		"baseVersion": 1,
+		"characterState": {
+			"level": 2,
+		},
+		"characterMetadata": {
+			"_persistly": {
+				"slotKey": "autosave",
+			},
+		},
+	})
+	_expect_error_code(sync_alias_result, "invalid_request", "sync_profile_character should reject stale characterState/characterMetadata aliases")
+
+	var extra_reserved_result = client.create_profile_character("sv_profile", "pst_profile_session", {
+		"metadata": {
+			"_persistly": {
+				"slotKey": "autosave",
+				"owner": "game",
+			},
+		},
+		"state": {
+			"level": 1,
+		},
+	})
+	_expect_error_code(extra_reserved_result, "invalid_request", "create_profile_character should reject extra reserved _persistly fields")
 
 
 func _check_profile_session_routes(client: Object) -> void:
+	var load_profile_result = client.load_profile("sv_profile", "pst_profile_session")
+	if typeof(load_profile_result) != TYPE_DICTIONARY or not load_profile_result.has("profile"):
+		_fail("load_profile should return a profile save envelope.")
+		return
+	_expect_profile(load_profile_result, {"profileSaveId": "sv_profile", "profile": PROFILE_WITH_CHARACTER_SAVE}, "load_profile", false)
+
+	var create_character = client.create_profile_character("sv_profile", "pst_profile_session", {
+		"metadata": {
+			"_persistly": {
+				"slotKey": "autosave",
+			},
+			"name": "Ayla",
+		},
+		"state": {
+			"gold": 100,
+			"level": 1,
+		},
+	})
+	if typeof(create_character) != TYPE_DICTIONARY or not create_character.has("character"):
+		_fail("create_profile_character should return the updated profile and character save.")
+		return
+	_expect_profile(create_character, CREATE_PROFILE_WITH_CHARACTER_RESPONSE, "create_profile_character", false)
+	_expect_save(create_character["character"], CHARACTER_SAVE, "create_profile_character character")
+
 	var load_result = client.load_profile_character("sv_profile", "pst_profile_session", "sv_char")
 	if typeof(load_result) != TYPE_DICTIONARY or not load_result.has("save"):
 		_fail("load_profile_character should return a save envelope.")
 		return
-	_expect_save(load_result["save"], CREATE_PROFILE_RESPONSE["character"]["save"], "load_profile_character")
+	_expect_save(load_result["save"], CHARACTER_SAVE, "load_profile_character")
 
 	var sync_result = client.sync_profile_character("sv_profile", "pst_profile_session", "sv_char", {
 		"baseVersion": 1,
 		"metadata": {
-			"slot": 1,
+			"_persistly": {
+				"slotKey": "autosave",
+			},
 			"name": "Ayla",
 		},
 		"state": {
@@ -295,6 +506,64 @@ func _check_profile_session_routes(client: Object) -> void:
 		_fail("sync_profile_character should return accepted status for a successful sync.")
 		return
 	_expect_save(sync_result.get("save", {}), SYNC_ACCEPTED_RESPONSE["save"], "sync_profile_character")
+
+	var duplicate = client.create_profile_character("sv_profile", "pst_profile_session", {
+		"metadata": {
+			"_persistly": {
+				"slotKey": "autosave",
+			},
+		},
+		"state": {
+			"level": 1,
+		},
+	})
+	_expect_error_code(duplicate, "slot_already_exists", "create_profile_character should preserve duplicate-slot typed errors")
+
+	var archived = client.sync_profile_character("sv_profile", "pst_profile_session", "sv_char", {
+		"baseVersion": 1,
+		"metadata": {
+			"_persistly": {
+				"slotKey": "autosave",
+			},
+		},
+		"state": {
+			"level": 1,
+		},
+	})
+	_expect_error_code(archived, "character_archived", "sync_profile_character should preserve archived-character typed errors")
+
+
+func _check_account_data_sync(client: Object) -> void:
+	var result = client.sync_profile_account_data("sv_profile", "pst_profile_session", {
+		"baseVersion": 2,
+		"accountDataPatch": {
+			"diamonds": 30,
+			"obsolete": null,
+		},
+		"metadata": {
+			"displayName": "Ayla Updated",
+		},
+	})
+	if typeof(result) != TYPE_DICTIONARY or result.get("status", "") != "accepted":
+		_fail("sync_profile_account_data should return accepted status.")
+		return
+
+	_expect_save(result.get("save", {}), ACCOUNT_DATA_SYNC_RESPONSE["save"], "sync_profile_account_data")
+	var state = result["save"].get("state", {})
+	if typeof(state) != TYPE_DICTIONARY or not state.has("characterSlots"):
+		_fail("sync_profile_account_data should preserve characterSlots in profile state.")
+
+
+func _check_archive(client: Object) -> void:
+	var result = client.archive_profile_character("sv_profile", "pst_profile_session", "sv_char")
+	if typeof(result) != TYPE_DICTIONARY or not result.has("profile"):
+		_fail("archive_profile_character should return the updated profile.")
+		return
+
+	_expect_profile(result, ARCHIVE_RESPONSE, "archive_profile_character", false)
+	var slots = result["profile"].get("state", {}).get("characterSlots", [])
+	if typeof(slots) != TYPE_ARRAY or slots.is_empty() or not bool(slots[0].get("archived", false)):
+		_fail("archive_profile_character should parse archived characterSlots.")
 
 
 func _check_runtime_config(client: Object) -> void:
@@ -312,6 +581,8 @@ func _check_runtime_config(client: Object) -> void:
 		_fail("get_runtime_config should preserve minRemoteSyncIntervalSeconds.")
 	if int(policy.get("forceSyncCooldownSeconds", 0)) != 10:
 		_fail("get_runtime_config should preserve forceSyncCooldownSeconds.")
+	if not policy.has("syncOnAppBackground"):
+		_fail("get_runtime_config should preserve syncOnAppBackground.")
 
 
 func _check_autosave(client_script: GDScript) -> void:
@@ -321,7 +592,9 @@ func _check_autosave(client_script: GDScript) -> void:
 		"profileSessionToken": "pst_profile_session",
 		"characterSaveId": "sv_char",
 		"metadata": {
-			"slot": 1,
+			"_persistly": {
+				"slotKey": "autosave",
+			},
 		},
 		"state": {
 			"level": 2,
@@ -378,6 +651,15 @@ func _check_cache_update(client: Object) -> void:
 		_fail("sync_save should return a canonical save payload.")
 
 
+func _expect_profile(actual: Dictionary, expected: Dictionary, label: String, expect_token: bool) -> void:
+	_expect_equal(actual.get("profileSaveId", ""), expected.get("profileSaveId", ""), label + " profileSaveId")
+	if expect_token:
+		_expect_equal(actual.get("profileSessionToken", ""), expected.get("profileSessionToken", ""), label + " profileSessionToken")
+	_expect_save(actual.get("profile", {}), expected.get("profile", {}), label + " profile")
+	if actual.has("syncPolicy") and expected.has("syncPolicy"):
+		_expect_dictionary(actual["syncPolicy"], expected["syncPolicy"], label + " syncPolicy")
+
+
 func _expect_save(actual: Variant, expected: Dictionary, label: String) -> void:
 	if typeof(actual) != TYPE_DICTIONARY:
 		_fail(label + " save payload should be a dictionary.")
@@ -400,6 +682,19 @@ func _expect_save(actual: Variant, expected: Dictionary, label: String) -> void:
 		if not _variants_equal(actual[key], expected[key]):
 			_fail(label + " save payload mismatch for " + key + ".")
 			return
+
+
+func _expect_dictionary(actual: Variant, expected: Dictionary, label: String) -> void:
+	if typeof(actual) != TYPE_DICTIONARY:
+		_fail(label + " should be a dictionary.")
+		return
+	if not _variants_equal(actual, expected):
+		_fail(label + " expected " + JSON.stringify(expected) + " but got " + JSON.stringify(actual) + ".")
+
+
+func _expect_equal(actual: Variant, expected: Variant, label: String) -> void:
+	if actual != expected:
+		_fail(label + " expected " + str(expected) + " but got " + str(actual) + ".")
 
 
 func _expect_error_code(result: Variant, expected_code: String, message: String) -> void:
@@ -494,6 +789,34 @@ func _seed_fixture_responses(client: Object) -> void:
 		},
 	})
 	client.register_fixture_response("POST", "/api/v1/profiles", 201, CREATE_PROFILE_RESPONSE)
-	client.register_fixture_response("GET", "/api/v1/profiles/sv_profile/characters/sv_char", 200, CREATE_PROFILE_RESPONSE["character"])
+	client.register_fixture_response("POST", "/api/v1/profiles", 201, CREATE_PROFILE_WITH_CHARACTER_RESPONSE)
+	client.register_fixture_response("GET", "/api/v1/profiles/sv_profile", 200, {
+		"profileSaveId": "sv_profile",
+		"profile": PROFILE_WITH_CHARACTER_SAVE,
+	})
+	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters", 201, CREATE_PROFILE_WITH_CHARACTER_RESPONSE)
+	client.register_fixture_response("GET", "/api/v1/profiles/sv_profile/characters/sv_char", 200, {
+		"save": CHARACTER_SAVE,
+	})
 	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/sync", 200, SYNC_ACCEPTED_RESPONSE)
+	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters", 409, {
+		"error": {
+			"code": "slot_already_exists",
+			"message": "An active character already exists for this slot key.",
+			"details": {
+				"slotKey": "autosave",
+			},
+		},
+	})
+	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/sync", 409, {
+		"error": {
+			"code": "character_archived",
+			"message": "Archived characters cannot be synced.",
+			"details": {
+				"characterSaveId": "sv_char",
+			},
+		},
+	})
+	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/account-data/sync", 200, ACCOUNT_DATA_SYNC_RESPONSE)
+	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/archive", 200, ARCHIVE_RESPONSE)
 	client.register_fixture_response("GET", "/api/v1/runtime-config", 200, RUNTIME_CONFIG_RESPONSE)

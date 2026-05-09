@@ -20,7 +20,7 @@ addons/persistly/
 contracts/
 ```
 
-The addon reads the pinned contract bundle from `res://contracts/persistly-contract-v0.2.0`, so copying only the addon without `contracts/` is incomplete.
+The addon reads the pinned contract bundle from `res://contracts/persistly-contract-v0.3.0`, so copying only the addon without `contracts/` is incomplete.
 
 When the public repository is connected, use:
 
@@ -36,15 +36,24 @@ const PersistlyGameSaves := preload("res://addons/persistly/persistly_game_saves
 var persistly := PersistlyGameSaves.new()
 persistly.configure({
 	"runtime_key": "ps_test_replace_me",
-	"sync_interval_seconds": 40,
+	"playerRef": "player-184",
+	"localProfileKey": "player-184",
 })
 
-await persistly.save_slot("autosave", {"level": 5, "coins": 1200})
-var loaded := await persistly.load_slot("autosave")
-await persistly.force_sync("autosave")
+persistly.save_slot("autosave", {"level": 5, "coins": 1200}, {"scene": "starter"})
+var loaded := persistly.load_slot("autosave")
+var synced := persistly.force_sync("autosave", {"bypassCooldown": true})
 ```
 
-`PersistlyGameSaves` stores slot state locally first. This initial facade keeps remote profile sync unwired; `force_sync` is present so games can wire the same call site now and gain remote behavior later.
+`PersistlyGameSaves` stores slot state locally first, creates a profile lazily on the first remote sync, and keeps local/cloud conflict state separate until the game chooses a resolution.
+
+For profile-first games, create the profile before character selection:
+
+```gdscript
+persistly.save_account_data({"diamonds": 20})
+var profile := persistly.ensure_profile()
+var session := persistly.get_profile_session({"includeToken": true})
+```
 
 ## Advanced Runtime Client
 
@@ -64,19 +73,23 @@ var created := client.create_profile({
 	"accountData": {
 		"diamonds": 20,
 	},
-	"characterMetadata": {
-		"characterName": "Ayla",
-		"slot": 1,
-	},
-	"characterState": {
-		"gold": 100,
-		"level": 1,
+	"character": {
+		"metadata": {
+			"_persistly": {
+				"slotKey": "autosave",
+			},
+			"characterName": "Ayla",
+		},
+		"state": {
+			"gold": 100,
+			"level": 1,
+		},
 	},
 })
 
-var profile_save_id: String = created["profile"]["profileSaveId"]
-var profile_session_token: String = created["profile"]["profileSessionToken"]
-var character_save_id: String = created["character"]["save"]["saveId"]
+var profile_save_id: String = created["profileSaveId"]
+var profile_session_token: String = created["profileSessionToken"]
+var character_save_id: String = created["character"]["saveId"]
 
 var loaded := client.load_profile_character(
 	profile_save_id,
@@ -86,8 +99,10 @@ var loaded := client.load_profile_character(
 var synced := client.sync_profile_character(profile_save_id, profile_session_token, character_save_id, {
 	"baseVersion": loaded["save"]["version"],
 	"metadata": {
+		"_persistly": {
+			"slotKey": "autosave",
+		},
 		"characterName": "Ayla",
-		"slot": 1,
 	},
 	"state": {
 		"gold": 120,
@@ -105,11 +120,24 @@ if synced.get("status", "") == "conflict":
 The package includes:
 
 - `PersistlyGameSaves`
-- `PersistlySlotStatus`
+- `PersistlyGameSaveStatus`
+- `PersistlyGameSaveTarget`
 - `configure`
+- `ensure_profile`
+- `get_profile_session`
+- `save_account_data`
+- `patch_account_data`
+- `force_sync_profile`
+- `sync_due_profile`
 - `save_slot`
 - `load_slot`
+- `list_slots`
+- `inspect_slot`
 - `force_sync`
+- `sync_due_slots`
+- `sync_due`
+- `archive_slot`
+- `clear_local_slot`
 - `accept_cloud_version`
 - `overwrite_cloud_version`
 - `keep_local_for_later`
@@ -118,6 +146,8 @@ The package includes:
 - `create_profile_character`
 - `load_profile_character`
 - `sync_profile_character`
+- `sync_profile_account_data`
+- `archive_profile_character`
 - advanced raw `create_save`, `load_save`, and `sync_save`
 - `get_runtime_config`
 - structured error envelopes, including `forbidden` profile-session failures
@@ -130,11 +160,13 @@ The package includes:
 
 Profile endpoints require `profileSessionToken`. The SDK sends it as `X-Persistly-Profile-Session` for profile and character routes.
 
-`playerRef` and `externalProfileRef` are optional developer references. `externalProfileRef` must be a dictionary such as `{ "provider": "auth0", "subject": "auth0|user_123" }`. These references are not authentication tokens, not ownership proof, and not public lookup APIs. Store `profileSaveId` and `profileSessionToken` locally or in your own trusted backend.
+`playerRef` and `externalProfileRef` are optional developer references. `externalProfileRef` must be a dictionary such as `{ "provider": "auth0", "subject": "auth0|user_123" }`. These references are not authentication tokens, not ownership proof, and not public lookup or recovery APIs. Cross-device restore requires explicit `profileSaveId` plus `profileSessionToken`, usually stored by your own trusted backend.
 
-## Autosave
+## Local Persistence And Sync
 
-`PersistlyAutosaveManager` lets games write every state change to local storage while respecting Persistly remote-sync policy:
+`PersistlyGameSaves` persists schema-versioned profile, slot index, and slot records under `user://` by default. It never starts background timers automatically. Call `sync_due_profile`, `sync_due_slots`, `sync_due`, or `force_sync` from your own lifecycle hooks or explicit save buttons.
+
+`PersistlyAutosaveManager` remains available for advanced integrations that want lower-level draft storage while respecting Persistly remote-sync policy:
 
 - local changes are stored immediately
 - remote sync can be throttled by `minRemoteSyncIntervalSeconds`
@@ -145,7 +177,7 @@ Use `PersistlyFileAutosaveDraftStore` for real players and `PersistlyMemoryAutos
 
 ## Contract Bundle
 
-This repo pins `persistly-contract-v0.2.0` under `contracts/`.
+This repo pins `persistly-contract-v0.3.0` under `contracts/`.
 The bundle is authoritative for request/response semantics, routes, and runtime limits.
 
 ## Validation
@@ -158,7 +190,7 @@ The bundle is authoritative for request/response semantics, routes, and runtime 
 
 ## Playable Proof
 
-`examples/last_beacon/` is a small endless idle demo that stores local profile/config under `user://` and wires Persistly create/load/sync from inside a real Godot project.
+`examples/last_beacon/` is a small endless idle demo. New integrations should follow the facade-first `PersistlyGameSaves` quickstart above; the raw client remains documented as an advanced reference.
 
 ## Release Checklist
 

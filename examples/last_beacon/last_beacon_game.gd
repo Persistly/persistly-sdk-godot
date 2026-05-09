@@ -2,11 +2,11 @@ extends Control
 
 const STATE_SCRIPT := preload("res://examples/last_beacon/last_beacon_state.gd")
 const STORE_SCRIPT := preload("res://examples/last_beacon/last_beacon_store.gd")
-const CLIENT_SCRIPT := preload("res://addons/persistly/persistly_client.gd")
+const GAME_SAVES_SCRIPT := preload("res://addons/persistly/persistly_game_saves.gd")
 
 const PROFILE_PATH := "user://last_beacon_profile.json"
-const AUTO_SYNC_INTERVAL_SECONDS := 20.0
 const TICK_INTERVAL_SECONDS := 1.0
+const SLOT_KEY := "autosave"
 
 var _state
 var _store
@@ -21,7 +21,6 @@ var _last_error: String = ""
 var _is_busy: bool = false
 
 var _tick_timer: Timer
-var _auto_sync_timer: Timer
 
 var _base_url_input: LineEdit
 var _runtime_key_input: LineEdit
@@ -97,17 +96,14 @@ func _on_resume_pressed() -> void:
 	_sync_status = "Connecting..."
 	_refresh_ui()
 
-	var client = _build_client(config)
-	if _character_save_id.is_empty():
-		_create_remote_save(client)
+	var persistly = _build_game_saves(config)
+	var ensure_result: Dictionary = persistly.ensure_profile()
+	if ensure_result.has("error"):
+		_last_error = String(ensure_result["error"].get("message", "Persistly profile create/load failed."))
+		_sync_status = "Profile connect failed"
 	else:
-		var load_result: Dictionary = client.load_profile_character(_profile_save_id, _profile_session_token, _character_save_id)
-		if load_result.has("error"):
-			_last_error = String(load_result["error"].get("message", "Persistly load failed."))
-			_sync_status = "Remote load failed"
-		else:
-			_apply_remote_save(load_result["save"])
-			_sync_status = "Remote save loaded"
+		_capture_profile_session(persistly)
+		_sync_facade_slot(persistly)
 
 	_is_busy = false
 	_save_profile()
@@ -129,30 +125,8 @@ func _sync_now() -> void:
 	_sync_status = "Syncing..."
 	_refresh_ui()
 
-	var client = _build_client(config)
-	if _character_save_id.is_empty():
-		_create_remote_save(client)
-		_is_busy = false
-		_save_profile()
-		_refresh_ui()
-		return
-
-	var payload := {
-		"baseVersion": _version,
-		"metadata": _current_metadata(),
-		"state": _state.to_save_state(),
-	}
-	var sync_result: Dictionary = client.sync_profile_character(_profile_save_id, _profile_session_token, _character_save_id, payload)
-	if sync_result.has("error"):
-		_last_error = String(sync_result["error"].get("message", "Persistly sync failed."))
-		_sync_status = "Sync failed"
-	else:
-		var status := String(sync_result.get("status", "accepted"))
-		_apply_remote_save(sync_result["save"])
-		if status == "conflict":
-			_sync_status = "Conflict resolved with canonical remote save"
-		else:
-			_sync_status = "Synced"
+	var persistly = _build_game_saves(config)
+	_sync_facade_slot(persistly)
 
 	_is_busy = false
 	_save_profile()
@@ -177,16 +151,6 @@ func _on_tick_timeout() -> void:
 		_sync_status = "Local changes pending"
 	_save_profile()
 	_refresh_ui()
-
-
-func _on_auto_sync_timeout() -> void:
-	if _character_save_id.is_empty():
-		return
-	if _is_busy:
-		return
-	if String(_current_config().get("runtimeKey", "")).is_empty():
-		return
-	_sync_now()
 
 
 func _build_ui() -> void:
@@ -287,8 +251,8 @@ func _build_ui() -> void:
 	note_box.add_theme_constant_override("separation", 8)
 	note_panel.add_child(note_box)
 	note_box.add_child(_panel_title("How This Proves Persistly"))
-	note_box.add_child(_paragraph("This scene stores runtime config, save ID, version, and local idle state under user:// so you can close and reopen it without losing context."))
-	note_box.add_child(_paragraph("Create or resume a remote save, keep playing locally, and use Sync Now or the auto-sync timer to push canonical state to Persistly."))
+	note_box.add_child(_paragraph("This scene stores runtime config, profile session, and local idle state under user:// so you can close and reopen it without losing context."))
+	note_box.add_child(_paragraph("PersistlyGameSaves saves the autosave slot locally first. Use Sync Now or Connect / Resume Remote Save to explicitly push the slot to Persistly."))
 
 
 func _section_heading(title: String, subtitle: String) -> VBoxContainer:
@@ -363,12 +327,6 @@ func _create_timers() -> void:
 	_tick_timer.timeout.connect(_on_tick_timeout)
 	add_child(_tick_timer)
 
-	_auto_sync_timer = Timer.new()
-	_auto_sync_timer.wait_time = AUTO_SYNC_INTERVAL_SECONDS
-	_auto_sync_timer.autostart = true
-	_auto_sync_timer.timeout.connect(_on_auto_sync_timeout)
-	add_child(_auto_sync_timer)
-
 
 func _apply_profile_to_inputs() -> void:
 	var config: Dictionary = _profile.get("config", {})
@@ -398,6 +356,7 @@ func _current_config() -> Dictionary:
 		"playerRef": _player_ref_input.text.strip_edges(),
 		"characterName": _character_name_input.text.strip_edges(),
 		"slotLabel": _slot_label_input.text.strip_edges(),
+		"localProfileKey": _local_profile_key(),
 	}
 
 
@@ -410,54 +369,57 @@ func _current_metadata() -> Dictionary:
 	}
 
 
-func _build_client(config: Dictionary):
-	return CLIENT_SCRIPT.new(
-		String(config.get("baseUrl", "")),
-		String(config.get("runtimeKey", "")),
-	)
+func _build_game_saves(config: Dictionary):
+	var persistly = GAME_SAVES_SCRIPT.new()
+	persistly.configure({
+		"baseUrl": String(config.get("baseUrl", "")),
+		"runtimeKey": String(config.get("runtimeKey", "")),
+		"playerRef": _nullable_string(String(config.get("playerRef", ""))),
+		"localProfileKey": String(config.get("localProfileKey", "")),
+		"profileSaveId": _profile_save_id,
+		"profileSessionToken": _profile_session_token,
+		"storage_path": "user://last_beacon_persistly",
+	})
+	return persistly
 
 
-func _create_remote_save(client) -> void:
-	var payload := {
-		"playerRef": _nullable_string(String(_current_config().get("playerRef", ""))),
-		"profileMetadata": {
-			"sample": "last-beacon",
-		},
-		"accountData": {
-			"credits": 0,
-		},
-		"characterMetadata": _current_metadata(),
-		"characterState": _state.to_save_state(),
-	}
-	var created: Dictionary = client.create_profile(payload)
-	if created.has("error"):
-		_last_error = String(created["error"].get("message", "Persistly create failed."))
-		_sync_status = "Create failed"
+func _sync_facade_slot(persistly) -> void:
+	var local_result: Dictionary = persistly.save_slot(SLOT_KEY, _state.to_save_state(), _current_metadata())
+	if local_result.has("error"):
+		_last_error = String(local_result["error"].get("message", "Persistly local save failed."))
+		_sync_status = "Local save failed"
 		return
 
-	var profile: Dictionary = created.get("profile", {})
-	var character: Dictionary = created.get("character", {})
-	_profile_save_id = String(profile.get("profileSaveId", ""))
-	_profile_session_token = String(profile.get("profileSessionToken", ""))
-	_apply_remote_save(character.get("save", {}))
-	_sync_status = "Remote profile created"
+	var sync_result: Dictionary = persistly.force_sync(SLOT_KEY, {
+		"bypassCooldown": true,
+	})
+	_capture_profile_session(persistly)
+	if sync_result.has("error"):
+		_last_error = String(sync_result["error"].get("message", "Persistly sync failed."))
+		_sync_status = "Sync failed"
+		return
 
-
-func _apply_remote_save(save: Dictionary) -> void:
-	if typeof(save.get("state", null)) == TYPE_DICTIONARY:
-		_state.from_save_state(save["state"])
-	if _character_save_id.is_empty():
-		_character_save_id = String(save.get("saveId", ""))
-	_version = int(save.get("version", 0))
-
-	var metadata: Dictionary = save.get("metadata", {})
-	if typeof(metadata) == TYPE_DICTIONARY:
-		if _character_name_input.text.strip_edges().is_empty():
-			_character_name_input.text = String(metadata.get("characterName", ""))
-		if _slot_label_input.text.strip_edges().is_empty():
-			_slot_label_input.text = String(metadata.get("slotLabel", ""))
-
+	_apply_facade_slot(sync_result)
+	if sync_result.get("status", "") == GAME_SAVES_SCRIPT.PersistlyGameSaveStatus.CONFLICT:
+		_sync_status = "Conflict: local and cloud states kept separately"
+	elif sync_result.get("status", "") == GAME_SAVES_SCRIPT.PersistlyGameSaveStatus.SYNCED:
+		_sync_status = "Synced"
+	else:
+		_sync_status = String(sync_result.get("status", "Local saved"))
 	_last_error = ""
+
+
+func _capture_profile_session(persistly) -> void:
+	var session: Dictionary = persistly.get_profile_session({
+		"includeToken": true,
+	})
+	_profile_save_id = String(session.get("profileSaveId", _profile_save_id))
+	_profile_session_token = String(session.get("profileSessionToken", _profile_session_token))
+
+
+func _apply_facade_slot(slot: Dictionary) -> void:
+	_character_save_id = String(slot.get("characterSaveId", _character_save_id))
+	_version = int(slot.get("version", _version))
 
 
 func _save_profile() -> void:
@@ -506,3 +468,10 @@ func _nullable_string(value: String) -> Variant:
 	if value.is_empty():
 		return null
 	return value
+
+
+func _local_profile_key() -> String:
+	var player_ref := _player_ref_input.text.strip_edges()
+	if not player_ref.is_empty():
+		return player_ref
+	return "last-beacon-local"

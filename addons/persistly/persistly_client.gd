@@ -129,7 +129,7 @@ func sync_save(save_id: String, payload: Dictionary) -> Dictionary:
 	if response.has("error"):
 		return response
 
-	return _normalize_sync_response(response, true, "sync_save")
+	return _normalize_sync_response(response, true, "sync_save", save_id, metadata, payload["state"])
 
 
 func create_profile(payload: Dictionary = {}) -> Dictionary:
@@ -258,7 +258,7 @@ func sync_profile_account_data(profile_save_id: String, profile_session_token: S
 	if response.has("error"):
 		return response
 
-	return _normalize_sync_response(response, true, "sync_profile_account_data")
+	return _normalize_sync_response(response, true, "sync_profile_account_data", profile_save_id, request_body.get("metadata", "__persistly_missing__"), _profile_state_from_sync(profile_save_id, request_body))
 
 
 func create_profile_character(profile_save_id: String, profile_session_token: String, payload: Dictionary) -> Dictionary:
@@ -340,7 +340,7 @@ func sync_profile_character(profile_save_id: String, profile_session_token: Stri
 	if response.has("error"):
 		return response
 
-	return _normalize_sync_response(response, true, "sync_profile_character")
+	return _normalize_sync_response(response, true, "sync_profile_character", character_save_id, metadata, payload["state"])
 
 
 func archive_profile_character(profile_save_id: String, profile_session_token: String, character_save_id: String) -> Dictionary:
@@ -677,19 +677,86 @@ func _normalize_save_envelope(response: Dictionary, cache_result: bool) -> Dicti
 	return normalized
 
 
-func _normalize_sync_response(response: Dictionary, cache_result: bool, label: String) -> Dictionary:
+func _profile_state_from_sync(profile_save_id: String, request_body: Dictionary) -> Dictionary:
+	var cached: Dictionary = _save_cache.get(profile_save_id, {})
+	var cached_state: Dictionary = cached.get("state", {}) if typeof(cached.get("state", {})) == TYPE_DICTIONARY else {}
+	var account_data: Dictionary = {}
+	if request_body.has("accountData"):
+		account_data = (request_body["accountData"] as Dictionary).duplicate(true)
+	elif request_body.has("accountDataPatch"):
+		account_data = (cached_state.get("accountData", {}) as Dictionary).duplicate(true) if typeof(cached_state.get("accountData", {})) == TYPE_DICTIONARY else {}
+		for key in (request_body["accountDataPatch"] as Dictionary).keys():
+			account_data[key] = request_body["accountDataPatch"][key]
+	else:
+		account_data = (cached_state.get("accountData", {}) as Dictionary).duplicate(true) if typeof(cached_state.get("accountData", {})) == TYPE_DICTIONARY else {}
+	var character_slots: Array = (cached_state.get("characterSlots", []) as Array).duplicate(true) if typeof(cached_state.get("characterSlots", [])) == TYPE_ARRAY else []
+	return {
+		"schema": "persistly.profile.v1",
+		"accountData": account_data,
+		"characterSlots": character_slots,
+	}
+
+
+func _synthesize_save_from_sync(save_id: String, request_metadata: Variant, request_state: Dictionary, response: Dictionary) -> Dictionary:
+	var cached: Dictionary = _save_cache.get(save_id, {})
+	var metadata: Dictionary = {}
+	if request_metadata == "__persistly_missing__":
+		metadata = cached.get("metadata", {}).duplicate(true) if typeof(cached.get("metadata", {})) == TYPE_DICTIONARY else {}
+	elif request_metadata == null:
+		metadata = {}
+	elif typeof(request_metadata) == TYPE_DICTIONARY:
+		metadata = (request_metadata as Dictionary).duplicate(true)
+	var created_at := String(cached.get("createdAt", "1970-01-01T00:00:00Z"))
+	return {
+		"saveId": save_id,
+		"playerRef": cached.get("playerRef", null),
+		"metadata": metadata,
+		"state": request_state.duplicate(true),
+		"version": int(response["version"]),
+		"createdAt": created_at,
+		"updatedAt": String(response["updatedAt"]),
+	}
+
+
+func _normalize_sync_response(
+	response: Dictionary,
+	cache_result: bool,
+	label: String,
+	save_id: String = "",
+	request_metadata: Variant = null,
+	request_state: Dictionary = {},
+) -> Dictionary:
 	var status = String(response.get("status", ""))
 	if status != "accepted" and status != "conflict":
 		return _error_result(ERROR_SERVER, label + " returned an unexpected status.")
 
-	var normalized := _normalize_save_envelope(response, cache_result)
-	if normalized.has("error"):
-		return normalized
+	var normalized := _copy_response_extras(response, [])
 
 	if status == "conflict":
+		normalized = _normalize_save_envelope(response, cache_result)
+		if normalized.has("error"):
+			return normalized
 		var details = normalized.get("details", {})
 		if typeof(details) != TYPE_DICTIONARY or String(details.get("reason", "")) != "base_version_mismatch":
 			return _error_result(ERROR_SERVER, label + " conflict response is missing a valid reason.")
+	else:
+		if not response.has("version") and not response.has("save"):
+			return _error_result(ERROR_SERVER, label + " accepted response is missing version.")
+		if not response.has("updatedAt") and not response.has("save"):
+			return _error_result(ERROR_SERVER, label + " accepted response is missing updatedAt.")
+		if response.has("save"):
+			normalized = _normalize_save_envelope(response, cache_result)
+			if normalized.has("error"):
+				return normalized
+		else:
+			var synthesized := _synthesize_save_from_sync(save_id, request_metadata, request_state, response)
+			var normalized_save := _normalize_save(synthesized, cache_result)
+			if normalized_save.has("error"):
+				return normalized_save
+			normalized["save"] = normalized_save
+		normalized["version"] = int(response.get("version", normalized["save"].get("version", 0)))
+		normalized["updatedAt"] = String(response.get("updatedAt", normalized["save"].get("updatedAt", "")))
+		normalized["historyRetained"] = bool(response.get("historyRetained", false))
 
 	normalized["status"] = status
 	return normalized

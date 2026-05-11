@@ -45,7 +45,7 @@ var loaded := persistly.load_slot("autosave")
 var synced := persistly.force_sync("autosave", {"bypassCooldown": true})
 ```
 
-`PersistlyGameSaves` stores slot state locally first, creates a profile lazily on the first remote sync, and keeps local/cloud conflict state separate until the game chooses a resolution.
+`save_slot` writes local gameplay state immediately. The first `force_sync`, `sync_due_slots`, or `sync_due` call creates the remote Persistly profile and the matching character slot if needed. The SDK keeps local/cloud conflict state separate until the game chooses a resolution.
 
 For profile-first games, create the profile before character selection:
 
@@ -180,7 +180,7 @@ Use `PersistlyFileAutosaveDraftStore` for real players and `PersistlyMemoryAutos
 This repo pins `persistly-contract-v0.3.0` under `contracts/`.
 The bundle is authoritative for request/response semantics, routes, and runtime limits.
 
-## Validation
+## Validate Local Changes
 
 ```bash
 /Applications/Godot.app/Contents/MacOS/Godot --headless --script scripts/validate_game_saves.gd
@@ -188,11 +188,11 @@ The bundle is authoritative for request/response semantics, routes, and runtime 
 /Applications/Godot.app/Contents/MacOS/Godot --headless --script scripts/validate_client.gd
 ```
 
-## Playable Proof
+## Example Project
 
 `examples/last_beacon/` is a small endless idle demo. New integrations should follow the facade-first `PersistlyGameSaves` quickstart above; the raw client remains documented as an advanced reference.
 
-## Release Checklist
+## Manual Runtime Check
 
 - validate the pinned contract bundle
 - run the client validation scripts

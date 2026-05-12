@@ -253,6 +253,16 @@ const RUNTIME_CONFIG_RESPONSE := {
 		"syncOnReconnect": true,
 		"maxQueuedLocalSnapshots": 25,
 	},
+	"gameConfig": {
+		"enabled": true,
+		"version": 3,
+		"sizeBytes": 37,
+		"hasData": true,
+		"eventName": "launch",
+		"config": {
+			"season": "spring",
+		},
+	},
 }
 
 var _failure_count := 0
@@ -567,7 +577,7 @@ func _check_archive(client: Object) -> void:
 
 
 func _check_runtime_config(client: Object) -> void:
-	var result = client.get_runtime_config()
+	var result = client.get_runtime_config(2)
 	if typeof(result) != TYPE_DICTIONARY or not result.has("syncPolicy"):
 		_fail("get_runtime_config should return syncPolicy.")
 		return
@@ -583,6 +593,10 @@ func _check_runtime_config(client: Object) -> void:
 		_fail("get_runtime_config should preserve forceSyncCooldownSeconds.")
 	if not policy.has("syncOnAppBackground"):
 		_fail("get_runtime_config should preserve syncOnAppBackground.")
+	if typeof(result.get("gameConfig", null)) != TYPE_DICTIONARY:
+		_fail("get_runtime_config should preserve gameConfig.")
+	elif int(result["gameConfig"].get("version", 0)) != 3:
+		_fail("get_runtime_config should preserve gameConfig version.")
 
 
 func _check_autosave(client_script: GDScript) -> void:
@@ -819,4 +833,4 @@ func _seed_fixture_responses(client: Object) -> void:
 	})
 	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/account-data/sync", 200, ACCOUNT_DATA_SYNC_RESPONSE)
 	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/archive", 200, ARCHIVE_RESPONSE)
-	client.register_fixture_response("GET", "/api/v1/runtime-config", 200, RUNTIME_CONFIG_RESPONSE)
+	client.register_fixture_response("GET", "/api/v1/runtime-config?gameConfigVersion=2", 200, RUNTIME_CONFIG_RESPONSE)

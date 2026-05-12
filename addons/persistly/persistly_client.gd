@@ -361,12 +361,18 @@ func archive_profile_character(profile_save_id: String, profile_session_token: S
 	return _normalize_profile_response(response, true, false)
 
 
-func get_runtime_config() -> Dictionary:
+func get_runtime_config(game_config_version: int = -1) -> Dictionary:
 	var preflight := _validate_runtime_configuration("get_runtime_config")
 	if not preflight.is_empty():
 		return preflight
+	if game_config_version < -1:
+		return _error_result(ERROR_INVALID_REQUEST, "get_runtime_config game_config_version must be a non-negative integer.")
 
-	var response := _request_json("GET", "/api/v1/runtime-config")
+	var path := "/api/v1/runtime-config"
+	if game_config_version >= 0:
+		path += "?gameConfigVersion=" + str(game_config_version)
+
+	var response := _request_json("GET", path)
 	if response.has("error"):
 		return response
 	if typeof(response.get("syncPolicy", null)) != TYPE_DICTIONARY:
@@ -484,7 +490,8 @@ func _normalize_base_url(value: String) -> String:
 
 
 func _request_json(method: String, path: String, body: Variant = null, profile_session_token: String = "") -> Dictionary:
-	_record_request(method, path, body, profile_session_token)
+	var headers := _request_headers(profile_session_token)
+	_record_request(method, path, body, profile_session_token, headers)
 	var fixture := _pop_fixture_response(method, path)
 	if not fixture.is_empty():
 		return _parse_transport_response(int(fixture.get("status_code", 500)), String(fixture.get("body", "")))
@@ -511,14 +518,6 @@ func _request_json(method: String, path: String, body: Variant = null, profile_s
 			"godotError": wait_error,
 		})
 
-	var headers := PackedStringArray([
-		"Authorization: Bearer " + runtime_key,
-		"Content-Type: application/json",
-		"Accept: application/json",
-		"User-Agent: PersistlyGodotSDK/" + SDK_VERSION,
-	])
-	if not profile_session_token.is_empty():
-		headers.append("X-Persistly-Profile-Session: " + profile_session_token)
 	var request_path := String(url_parts.get("base_path", "")) + path
 	var request_body := ""
 	if body != null:
@@ -536,15 +535,34 @@ func _request_json(method: String, path: String, body: Variant = null, profile_s
 	return response
 
 
-func _record_request(method: String, path: String, body: Variant, profile_session_token: String) -> void:
+func _request_headers(profile_session_token: String) -> PackedStringArray:
+	var headers := PackedStringArray([
+		"Authorization: Bearer " + runtime_key,
+		"Content-Type: application/json",
+		"Accept: application/json",
+		"User-Agent: PersistlyGodotSDK/" + SDK_VERSION,
+		"X-Persistly-SDK: godot",
+		"X-Persistly-SDK-Version: " + SDK_VERSION,
+		"X-Persistly-Platform: godot",
+	])
+	if not profile_session_token.is_empty():
+		headers.append("X-Persistly-Profile-Session: " + profile_session_token)
+	return headers
+
+
+func _record_request(method: String, path: String, body: Variant, profile_session_token: String, headers: PackedStringArray) -> void:
 	var recorded_body = body
 	if typeof(body) == TYPE_DICTIONARY or typeof(body) == TYPE_ARRAY:
 		recorded_body = body.duplicate(true)
+	var recorded_headers: Array = []
+	for header in headers:
+		recorded_headers.append(String(header))
 	_recorded_requests.append({
 		"method": method.to_upper(),
 		"path": path,
 		"body": recorded_body,
 		"profileSessionToken": profile_session_token,
+		"headers": recorded_headers,
 	})
 
 

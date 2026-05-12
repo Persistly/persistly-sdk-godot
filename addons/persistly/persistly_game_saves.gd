@@ -401,6 +401,9 @@ func _sync_profile(options: Dictionary, force: bool) -> Dictionary:
 	_profile_last_synced_msec = Time.get_ticks_msec()
 	_persist_profile()
 	var result := _profile_result(PersistlyGameSaveStatus.SYNCED, false)
+	result["historyRetained"] = bool(synced.get("historyRetained", false))
+	if typeof(synced.get("warnings", null)) == TYPE_ARRAY:
+		result["warnings"] = (synced["warnings"] as Array).duplicate(true)
 	_notify_sync_result(result)
 	return result
 
@@ -456,7 +459,7 @@ func _sync_slot(slot_key: String, options: Dictionary, force: bool, overwrite: b
 		return conflict_result
 
 	_apply_character_save_to_slot(slot_key, response.get("save", {}))
-	return _finalize_synced_slot(slot_key)
+	return _finalize_synced_slot(slot_key, response)
 
 
 func _create_profile_with_first_slot(slot_key: String, slot: Dictionary) -> Dictionary:
@@ -487,7 +490,7 @@ func _create_profile_with_first_slot(slot_key: String, slot: Dictionary) -> Dict
 	return _finalize_synced_slot(slot_key)
 
 
-func _finalize_synced_slot(slot_key: String) -> Dictionary:
+func _finalize_synced_slot(slot_key: String, sync_response: Dictionary = {}) -> Dictionary:
 	var slot: Dictionary = _slots[slot_key]
 	slot["dirty"] = false
 	slot["status"] = PersistlyGameSaveStatus.SYNCED
@@ -499,6 +502,10 @@ func _finalize_synced_slot(slot_key: String) -> Dictionary:
 	_persist_slot_index()
 	var result := _slot_result(slot, PersistlyGameSaveStatus.SYNCED)
 	result["target"] = PersistlyGameSaveTarget.SLOT
+	if not sync_response.is_empty():
+		result["historyRetained"] = bool(sync_response.get("historyRetained", false))
+		if typeof(sync_response.get("warnings", null)) == TYPE_ARRAY:
+			result["warnings"] = (sync_response["warnings"] as Array).duplicate(true)
 	_notify_sync_result(result)
 	return result
 

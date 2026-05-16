@@ -28,6 +28,16 @@ When the public repository is connected, use:
 https://github.com/Persistly/persistly-sdk-godot
 ```
 
+## Asset Library Package
+
+Build the release ZIP for the Godot Asset Library:
+
+```bash
+scripts/package_release.sh 1.0.0
+```
+
+Submission metadata lives in `ASSETLIB.md`.
+
 ## Quickstart
 
 ```gdscript

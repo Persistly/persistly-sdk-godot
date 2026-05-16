@@ -548,7 +548,7 @@ func _check_first_dirty_slot_sync_creates_profile_with_character(game_saves_scri
 		var headers: Array = requests[0].get("headers", [])
 		if not headers.has("X-Persistly-SDK: godot"):
 			_fail("first dirty slot sync should send X-Persistly-SDK diagnostics header.")
-		if not headers.has("X-Persistly-SDK-Version: 0.10.0"):
+		if not headers.has("X-Persistly-SDK-Version: 1.0.0"):
 			_fail("first dirty slot sync should send X-Persistly-SDK-Version diagnostics header.")
 		if not headers.has("X-Persistly-Platform: godot"):
 			_fail("first dirty slot sync should send X-Persistly-Platform diagnostics header.")

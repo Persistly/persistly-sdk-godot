@@ -296,7 +296,7 @@ func _initialize() -> void:
 
 
 func _check_versions(client_script: GDScript) -> void:
-	_expect_equal(client_script.SDK_VERSION, "0.10.0", "SDK_VERSION")
+	_expect_equal(client_script.SDK_VERSION, "1.0.0", "SDK_VERSION")
 	_expect_equal(client_script.BUNDLE_VERSION, "persistly-contract-v0.3.0", "BUNDLE_VERSION")
 
 

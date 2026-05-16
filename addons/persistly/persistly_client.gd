@@ -1,7 +1,7 @@
 extends RefCounted
 class_name PersistlyClient
 
-const SDK_VERSION := "0.10.0"
+const SDK_VERSION := "1.0.0"
 const BUNDLE_VERSION := "persistly-contract-v0.3.0"
 const BUNDLE_ROOT := "res://contracts/persistly-contract-v0.3.0"
 const DEFAULT_BASE_URL := "https://api.persistly.app"

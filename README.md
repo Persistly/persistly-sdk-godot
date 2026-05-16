@@ -188,6 +188,20 @@ The bundle is authoritative for request/response semantics, routes, and runtime 
 /Applications/Godot.app/Contents/MacOS/Godot --headless --script scripts/validate_client.gd
 ```
 
+## Live Parity Smoke
+
+Run this only with a dev/test runtime key. It creates a temporary profile and `autosave` character slot through the game-friendly facade, verifies local load, force sync, due-slot sync, profile account-data sync, and exported profile session data.
+
+```bash
+PERSISTLY_RUNTIME_KEY=ps_test_replace_me scripts/live_smoke.sh
+```
+
+Optional:
+
+```bash
+PERSISTLY_API_BASE=https://stage-api.persistly.app PERSISTLY_RUNTIME_KEY=ps_test_replace_me scripts/live_smoke.sh
+```
+
 ## Example Project
 
 `examples/last_beacon/` is a small endless idle demo. New integrations should follow the facade-first `PersistlyGameSaves` quickstart above; the raw client remains documented as an advanced reference.

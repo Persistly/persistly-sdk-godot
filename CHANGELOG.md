@@ -4,6 +4,7 @@
 
 - First stable Godot SDK release for Persistly cloud save sync.
 - Adds `PersistlyGameSaves` as the recommended game-friendly facade for named slots, local-first saves, profile account data, profile sessions, due-slot sync, force sync, and explicit conflict states.
+- Reconciles an existing remote slot when a local slot is missing its `characterSaveId`, preventing duplicate-slot errors after reinstall, cache loss, or local state drift.
 - Keeps `PersistlyClient` raw profile, character, runtime config, and legacy save APIs available for advanced integrations.
 - Adds dev/test live parity smoke tooling for real API validation without committing runtime keys.
 - Pins `persistly-contract-v0.3.0`.

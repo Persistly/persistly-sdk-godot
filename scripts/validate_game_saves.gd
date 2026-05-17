@@ -323,6 +323,7 @@ func _initialize() -> void:
 	_check_profile_session_and_account_data(game_saves_script)
 	_check_existing_profile_session_loads_remote_profile(game_saves_script)
 	_check_profile_only_ensure_and_remote_slot_sync(game_saves_script)
+	_check_duplicate_remote_slot_is_reconciled(game_saves_script)
 	_check_first_dirty_slot_sync_creates_profile_with_character(game_saves_script)
 	_check_sync_policy_and_cooldown(game_saves_script)
 	_check_profile_conflict_payload(game_saves_script)
@@ -514,6 +515,58 @@ func _check_profile_only_ensure_and_remote_slot_sync(game_saves_script: Script) 
 	var inspected: Dictionary = persistly.inspect_slot("autosave")
 	_expect_equal(inspected.get("dirty", true), false, "force_sync clears dirty flag")
 	_expect_dictionary(inspected.get("cloudState", {}), CHARACTER_SAVE["state"], "force_sync stores cloud state separately")
+
+
+func _check_duplicate_remote_slot_is_reconciled(game_saves_script: Script) -> void:
+	var persistly: Object = game_saves_script.new()
+	persistly.configure({
+		"runtime_key": "ps_test_replace_me",
+		"profileSaveId": "sv_profile",
+		"profileSessionToken": "pst_profile_session",
+		"playerRef": "player-184",
+		"localProfileKey": "validation-duplicate-slot-recovery",
+		"storage_path": _storage_path("duplicate_slot_recovery"),
+		"syncPolicy": {
+			"minRemoteSyncIntervalSeconds": 60,
+			"forceSyncCooldownSeconds": 0,
+			"syncOnAppBackground": true,
+			"syncOnAppForeground": true,
+			"syncOnReconnect": true,
+			"maxQueuedLocalSnapshots": 25,
+		},
+	})
+	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters", 409, {
+		"error": {
+			"code": "slot_already_exists",
+			"message": "An active character already exists for this slot key.",
+		},
+	})
+	persistly._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile", 200, {
+		"profileSaveId": "sv_profile",
+		"profile": PROFILE_WITH_CHARACTER_SAVE,
+		"syncPolicy": PROFILE_CREATE_RESPONSE["syncPolicy"],
+	})
+	persistly._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile/characters/sv_char", 200, {
+		"save": CHARACTER_SAVE,
+	})
+	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/sync", 200, SYNC_ACCEPTED_RESPONSE)
+	persistly.save_slot("autosave", {
+		"level": 6,
+		"coins": 1400,
+	}, {
+		"scene": "local",
+	})
+
+	var synced: Dictionary = persistly.force_sync("autosave", {
+		"bypassCooldown": true,
+	})
+	_expect_equal(synced.get("status", ""), "synced", "duplicate remote slot recovery sync status")
+	_expect_equal(synced.get("characterSaveId", ""), "sv_char", "duplicate remote slot recovery stores characterSaveId")
+	var requests: Array = persistly._client.get_recorded_requests()
+	if requests.size() != 4:
+		_fail("duplicate remote slot recovery should create, reload profile, load character, then sync.")
+	elif requests[3].get("path", "") != "/api/v1/profiles/sv_profile/characters/sv_char/sync":
+		_fail("duplicate remote slot recovery should retry using the reconciled character save id.")
 
 
 func _check_first_dirty_slot_sync_creates_profile_with_character(game_saves_script: Script) -> void:

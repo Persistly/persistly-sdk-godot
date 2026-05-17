@@ -440,6 +440,12 @@ func _sync_slot(slot_key: String, options: Dictionary, force: bool, overwrite: b
 			"state": slot.get("state", {}),
 		})
 		if response.has("error"):
+			var error = response.get("error", {})
+			if typeof(error) == TYPE_DICTIONARY and String(error.get("code", "")) == CLIENT_SCRIPT.ERROR_SLOT_ALREADY_EXISTS:
+				var recovered := _recover_existing_remote_slot(slot_key)
+				if recovered.has("error"):
+					return recovered
+				return _sync_slot(slot_key, options, true, overwrite)
 			return _map_remote_error(response, PersistlyGameSaveTarget.SLOT, slot_key)
 		_apply_profile_response(response, false)
 		if response.has("character"):
@@ -460,6 +466,23 @@ func _sync_slot(slot_key: String, options: Dictionary, force: bool, overwrite: b
 
 	_apply_character_save_to_slot(slot_key, response.get("save", {}))
 	return _finalize_synced_slot(slot_key, response)
+
+
+func _recover_existing_remote_slot(slot_key: String) -> Dictionary:
+	var restored := _restore_profile(true)
+	if restored.has("error"):
+		return restored
+	var slot: Dictionary = _slots.get(slot_key, {})
+	var character_save_id := String(slot.get("characterSaveId", ""))
+	if character_save_id.is_empty():
+		return _error_result(ERROR_STORAGE, "Persistly could not reconcile remote slot " + slot_key + " after duplicate slot response.")
+
+	var loaded: Dictionary = _client.load_profile_character(profile_save_id, profile_session_token, character_save_id)
+	if loaded.has("error"):
+		return _map_remote_error(loaded, PersistlyGameSaveTarget.SLOT, slot_key)
+	_apply_character_save_to_slot(slot_key, loaded.get("save", loaded))
+	_persist_slot(slot_key)
+	return {}
 
 
 func _create_profile_with_first_slot(slot_key: String, slot: Dictionary) -> Dictionary:

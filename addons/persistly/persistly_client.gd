@@ -198,6 +198,22 @@ func load_profile(profile_save_id: String, profile_session_token: String) -> Dic
 	return _normalize_profile_response(response, true, false)
 
 
+func delete_profile(profile_save_id: String, profile_session_token: String) -> Dictionary:
+	var preflight := _validate_profile_session_configuration("delete_profile", profile_save_id, profile_session_token)
+	if not preflight.is_empty():
+		return preflight
+
+	var response := _request_json(
+		"DELETE",
+		"/api/v1/profiles/" + _url_encode(profile_save_id),
+		null,
+		profile_session_token)
+	if response.has("error"):
+		return response
+
+	return _normalize_delete_profile_response(response, profile_save_id)
+
+
 func sync_profile_account_data(profile_save_id: String, profile_session_token: String, payload: Dictionary) -> Dictionary:
 	var preflight := _validate_profile_session_configuration("sync_profile_account_data", profile_save_id, profile_session_token)
 	if not preflight.is_empty():
@@ -297,6 +313,24 @@ func load_profile_character(profile_save_id: String, profile_session_token: Stri
 		return response
 
 	return _normalize_save_envelope(response, true)
+
+
+func delete_profile_character(profile_save_id: String, profile_session_token: String, character_save_id: String) -> Dictionary:
+	var preflight := _validate_profile_session_configuration("delete_profile_character", profile_save_id, profile_session_token)
+	if not preflight.is_empty():
+		return preflight
+	if character_save_id.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "delete_profile_character requires a non-empty character_save_id.")
+
+	var response := _request_json(
+		"DELETE",
+		"/api/v1/profiles/" + _url_encode(profile_save_id) + "/characters/" + _url_encode(character_save_id),
+		null,
+		profile_session_token)
+	if response.has("error"):
+		return response
+
+	return _normalize_delete_profile_character_response(response, character_save_id)
 
 
 func sync_profile_character(profile_save_id: String, profile_session_token: String, character_save_id: String, payload: Dictionary) -> Dictionary:
@@ -818,6 +852,62 @@ func _normalize_profile_response(response: Dictionary, cache_result: bool, requi
 		if character.has("error"):
 			return character
 		normalized["character"] = character
+	return normalized
+
+
+func _normalize_delete_profile_response(response: Dictionary, profile_save_id: String) -> Dictionary:
+	if typeof(response.get("profileSaveId", null)) != TYPE_STRING or String(response.get("profileSaveId", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly delete profile response is missing profileSaveId.")
+	if typeof(response.get("deletedAt", null)) != TYPE_STRING or String(response.get("deletedAt", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly delete profile response is missing deletedAt.")
+	var deleted_character_count_type := typeof(response.get("deletedCharacterCount", null))
+	if not (deleted_character_count_type == TYPE_INT or deleted_character_count_type == TYPE_FLOAT):
+		return _error_result(ERROR_SERVER, "Persistly delete profile response is missing deletedCharacterCount.")
+	if typeof(response.get("alreadyDeleted", null)) != TYPE_BOOL:
+		return _error_result(ERROR_SERVER, "Persistly delete profile response is missing alreadyDeleted.")
+	if typeof(response.get("cleanupQueued", null)) != TYPE_BOOL:
+		return _error_result(ERROR_SERVER, "Persistly delete profile response is missing cleanupQueued.")
+
+	var normalized := {
+		"profileSaveId": String(response["profileSaveId"]),
+		"deletedAt": String(response["deletedAt"]),
+		"deletedCharacterCount": int(response["deletedCharacterCount"]),
+		"alreadyDeleted": bool(response["alreadyDeleted"]),
+		"cleanupQueued": bool(response["cleanupQueued"]),
+	}
+	clear_cached_save(profile_save_id)
+	return normalized
+
+
+func _normalize_delete_profile_character_response(response: Dictionary, character_save_id: String) -> Dictionary:
+	if typeof(response.get("profileSaveId", null)) != TYPE_STRING or String(response.get("profileSaveId", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly delete profile character response is missing profileSaveId.")
+	if typeof(response.get("characterSaveId", null)) != TYPE_STRING or String(response.get("characterSaveId", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly delete profile character response is missing characterSaveId.")
+	if typeof(response.get("deletedAt", null)) != TYPE_STRING or String(response.get("deletedAt", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly delete profile character response is missing deletedAt.")
+	if typeof(response.get("alreadyDeleted", null)) != TYPE_BOOL:
+		return _error_result(ERROR_SERVER, "Persistly delete profile character response is missing alreadyDeleted.")
+	if typeof(response.get("cleanupQueued", null)) != TYPE_BOOL:
+		return _error_result(ERROR_SERVER, "Persistly delete profile character response is missing cleanupQueued.")
+
+	var normalized: Dictionary = {
+		"profileSaveId": String(response["profileSaveId"]),
+		"characterSaveId": String(response["characterSaveId"]),
+		"deletedAt": String(response["deletedAt"]),
+		"alreadyDeleted": bool(response["alreadyDeleted"]),
+		"cleanupQueued": bool(response["cleanupQueued"]),
+	}
+	if typeof(response.get("slotKey", null)) == TYPE_STRING:
+		normalized["slotKey"] = String(response["slotKey"])
+	clear_cached_save(character_save_id)
+	if response.has("profile"):
+		if typeof(response["profile"]) != TYPE_DICTIONARY:
+			return _error_result(ERROR_SERVER, "Persistly delete profile character response profile must be a dictionary.")
+		var profile := _normalize_save(response["profile"], true)
+		if profile.has("error"):
+			return profile
+		normalized["profile"] = profile
 	return normalized
 
 

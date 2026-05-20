@@ -55,15 +55,42 @@ var loaded := persistly.load_slot("autosave")
 var synced := persistly.force_sync("autosave", {"bypassCooldown": true})
 ```
 
-`save_slot` writes local gameplay state immediately. The first `force_sync`, `sync_due_slots`, or `sync_due` call creates the remote Persistly profile and the matching character slot if needed. The SDK keeps local/cloud conflict state separate until the game chooses a resolution.
+`save_slot` writes local gameplay state immediately and guarantees a local profile envelope exists. The first `force_sync`, `sync_due_slots`, or `sync_due` call creates the remote Persistly profile and the matching character slot if needed. The SDK keeps local/cloud conflict state separate until the game chooses a resolution.
 
 For profile-first games, create the profile before character selection:
 
 ```gdscript
 persistly.save_account_data({"diamonds": 20})
-var profile := persistly.ensure_profile()
+var profile := persistly.create_profile()
 var session := persistly.get_profile_session({"includeToken": true})
 ```
+
+To attach an already existing Persistly profile into empty local state:
+
+```gdscript
+var attached := persistly.attach_profile("sv_profile", "pst_profile_session")
+```
+
+Facade rules:
+
+- `create_profile()` creates and stores one local facade profile, then syncs it to Persistly.
+- `create_profile()` rejects if local profile or slot state already exists.
+- `attach_profile()` loads an already existing Persistly profile into empty local state.
+- If you want to switch players on the same device, call `clear_local_profile()` first.
+
+To sign out locally or wipe the current local player namespace:
+
+```gdscript
+persistly.clear_local_profile()
+```
+
+That removes the stored local profile session and all local slots for the current `localProfileKey`. If you support account switching, call `configure(...)` again with the next player's identity or local namespace after clearing local state.
+
+Delete parity:
+
+- `delete_slot("autosave")` deletes only local state when the slot was never synced, or deletes the remote profile character when `characterSaveId` exists.
+- `delete_profile()` clears local state when no synced profile exists, or sends a remote profile delete and then wipes local session plus all local slots.
+- Both delete paths surface `warnings: ["delete_cleanup_queued"]` when backend cleanup is deferred.
 
 ## Advanced Runtime Client
 
@@ -134,6 +161,8 @@ The package includes:
 - `PersistlyGameSaveTarget`
 - `configure`
 - `ensure_profile`
+- `create_profile`
+- `attach_profile`
 - `get_profile_session`
 - `save_account_data`
 - `patch_account_data`
@@ -147,14 +176,19 @@ The package includes:
 - `sync_due_slots`
 - `sync_due`
 - `archive_slot`
+- `delete_profile`
+- `delete_slot`
+- `clear_local_profile`
 - `clear_local_slot`
 - `accept_cloud_version`
 - `overwrite_cloud_version`
 - `keep_local_for_later`
 - `create_profile`
 - `load_profile`
+- `delete_profile`
 - `create_profile_character`
 - `load_profile_character`
+- `delete_profile_character`
 - `sync_profile_character`
 - `sync_profile_account_data`
 - `archive_profile_character`
@@ -175,6 +209,8 @@ Profile endpoints require `profileSessionToken`. The SDK sends it as `X-Persistl
 ## Local Persistence And Sync
 
 `PersistlyGameSaves` persists schema-versioned profile, slot index, and slot records under `user://` by default. It never starts background timers automatically. Call `sync_due_profile`, `sync_due_slots`, `sync_due`, or `force_sync` from your own lifecycle hooks or explicit save buttons.
+
+`PersistlyClient.create_profile(...)` remains a low-level runtime API call. It always attempts remote creation and does not guard against an already configured local facade session. Normal game flow should prefer `ensure_profile` plus slot sync.
 
 `PersistlyAutosaveManager` remains available for advanced integrations that want lower-level draft storage while respecting Persistly remote-sync policy:
 

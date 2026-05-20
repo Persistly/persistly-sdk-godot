@@ -244,6 +244,40 @@ const ARCHIVE_RESPONSE := {
 	},
 }
 
+const DELETE_PROFILE_CHARACTER_RESPONSE := {
+	"profileSaveId": "sv_profile",
+	"characterSaveId": "sv_char",
+	"slotKey": "autosave",
+	"deletedAt": "2026-04-09T10:04:00Z",
+	"alreadyDeleted": false,
+	"cleanupQueued": true,
+	"profile": {
+		"saveId": "sv_profile",
+		"playerRef": "player-184",
+		"metadata": {
+			"displayName": "Ayla",
+		},
+		"state": {
+			"schema": "persistly.profile.v1",
+			"accountData": {
+				"diamonds": 20,
+			},
+			"characterSlots": [],
+		},
+		"version": 5,
+		"createdAt": "2026-04-09T10:00:00Z",
+		"updatedAt": "2026-04-09T10:04:00Z",
+	},
+}
+
+const DELETE_PROFILE_RESPONSE := {
+	"profileSaveId": "sv_profile",
+	"deletedAt": "2026-04-09T10:10:00Z",
+	"deletedCharacterCount": 1,
+	"alreadyDeleted": false,
+	"cleanupQueued": true,
+}
+
 const RUNTIME_CONFIG_RESPONSE := {
 	"syncPolicy": {
 		"minRemoteSyncIntervalSeconds": 60,
@@ -288,6 +322,7 @@ func _initialize() -> void:
 	_check_profile_session_routes(client)
 	_check_account_data_sync(client)
 	_check_archive(client)
+	_check_delete_routes(client)
 	_check_runtime_config(client)
 	_check_autosave(client_script)
 	_check_error_mapping(client)
@@ -576,6 +611,28 @@ func _check_archive(client: Object) -> void:
 		_fail("archive_profile_character should parse archived characterSlots.")
 
 
+func _check_delete_routes(client: Object) -> void:
+	var deleted_character = client.delete_profile_character("sv_profile", "pst_profile_session", "sv_char")
+	if typeof(deleted_character) != TYPE_DICTIONARY or deleted_character.get("characterSaveId", "") != "sv_char":
+		_fail("delete_profile_character should return deleted character payload.")
+		return
+	if not deleted_character.has("profile"):
+		_fail("delete_profile_character should preserve optional profile envelope when provided.")
+	else:
+		_expect_save(deleted_character["profile"], DELETE_PROFILE_CHARACTER_RESPONSE["profile"], "delete_profile_character profile")
+	if not client.get_cached_save("sv_char").is_empty():
+		_fail("delete_profile_character should clear cached character saves.")
+	if client.get_cached_save("sv_profile").is_empty():
+		_fail("delete_profile_character should refresh cached profile saves when profile payload is returned.")
+
+	var deleted_profile = client.delete_profile("sv_profile", "pst_profile_session")
+	if typeof(deleted_profile) != TYPE_DICTIONARY or int(deleted_profile.get("deletedCharacterCount", -1)) != 1:
+		_fail("delete_profile should return deleted profile payload.")
+		return
+	if not client.get_cached_save("sv_profile").is_empty():
+		_fail("delete_profile should clear cached profile saves.")
+
+
 func _check_runtime_config(client: Object) -> void:
 	var result = client.get_runtime_config(2)
 	if typeof(result) != TYPE_DICTIONARY or not result.has("syncPolicy"):
@@ -833,4 +890,6 @@ func _seed_fixture_responses(client: Object) -> void:
 	})
 	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/account-data/sync", 200, ACCOUNT_DATA_SYNC_RESPONSE)
 	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/archive", 200, ARCHIVE_RESPONSE)
+	client.register_fixture_response("DELETE", "/api/v1/profiles/sv_profile/characters/sv_char", 200, DELETE_PROFILE_CHARACTER_RESPONSE)
+	client.register_fixture_response("DELETE", "/api/v1/profiles/sv_profile", 200, DELETE_PROFILE_RESPONSE)
 	client.register_fixture_response("GET", "/api/v1/runtime-config?gameConfigVersion=2", 200, RUNTIME_CONFIG_RESPONSE)

@@ -259,6 +259,40 @@ const ARCHIVE_RESPONSE := {
 	},
 }
 
+const DELETE_CHARACTER_PROFILE_RESPONSE := {
+	"saveId": "sv_profile",
+	"playerRef": "player-184",
+	"metadata": {
+		"displayName": "Ayla",
+	},
+	"state": {
+		"schema": "persistly.profile.v1",
+		"accountData": {},
+		"characterSlots": [],
+	},
+	"version": 5,
+	"createdAt": "2026-04-09T10:00:00Z",
+	"updatedAt": "2026-04-09T10:05:00Z",
+}
+
+const DELETE_CHARACTER_RESPONSE := {
+	"profileSaveId": "sv_profile",
+	"characterSaveId": "sv_char",
+	"slotKey": "autosave",
+	"deletedAt": "2026-04-09T10:05:00Z",
+	"alreadyDeleted": false,
+	"cleanupQueued": true,
+	"profile": DELETE_CHARACTER_PROFILE_RESPONSE,
+}
+
+const DELETE_PROFILE_RESPONSE := {
+	"profileSaveId": "sv_profile",
+	"deletedAt": "2026-04-09T10:10:00Z",
+	"deletedCharacterCount": 1,
+	"alreadyDeleted": false,
+	"cleanupQueued": true,
+}
+
 const REPLACEMENT_CHARACTER_CREATE_RESPONSE := {
 	"profileSaveId": "sv_profile",
 	"profile": {
@@ -321,7 +355,9 @@ func _initialize() -> void:
 	_check_not_configured(game_saves_script)
 	_check_configured_local_slot_flow(game_saves_script)
 	_check_profile_session_and_account_data(game_saves_script)
+	_check_facade_create_and_attach_profile(game_saves_script)
 	_check_existing_profile_session_loads_remote_profile(game_saves_script)
+	_check_refresh_slot_pull_and_dirty_conflict(game_saves_script)
 	_check_profile_only_ensure_and_remote_slot_sync(game_saves_script)
 	_check_duplicate_remote_slot_is_reconciled(game_saves_script)
 	_check_first_dirty_slot_sync_creates_profile_with_character(game_saves_script)
@@ -329,6 +365,8 @@ func _initialize() -> void:
 	_check_profile_conflict_payload(game_saves_script)
 	_check_conflict_helpers(game_saves_script)
 	_check_archive_and_clear(game_saves_script)
+	_check_delete_profile_and_slot(game_saves_script)
+	_check_clear_local_profile(game_saves_script)
 	_check_archived_slot_can_be_reused(game_saves_script)
 	_check_rejects_reserved_developer_metadata(game_saves_script)
 	_check_schema_versioned_file_persistence(game_saves_script)
@@ -449,6 +487,8 @@ func _check_profile_session_and_account_data(game_saves_script: Script) -> void:
 		"obsolete": null,
 	})
 	_expect_equal(patched.get("accountData", {}).get("diamonds", 0), 25, "patch_account_data shallow patch")
+	_expect_equal(persistly.get_account_data().get("diamonds", 0), 25, "get_account_data local read")
+	_expect_equal(persistly.inspect_profile().get("accountData", {}).get("diamonds", 0), 25, "inspect_profile account data")
 	if patched.get("accountData", {}).has("obsolete"):
 		_fail("patch_account_data should delete keys patched to null.")
 
@@ -457,6 +497,42 @@ func _check_profile_session_and_account_data(game_saves_script: Script) -> void:
 	})
 	_expect_equal(synced.get("status", ""), "synced", "force_sync_profile status")
 	_expect_equal(synced.get("target", ""), "profile", "force_sync_profile target")
+
+
+func _check_facade_create_and_attach_profile(game_saves_script: Script) -> void:
+	var created_facade: Object = game_saves_script.new()
+	created_facade.configure({
+		"runtime_key": "ps_test_replace_me",
+		"playerRef": "player-184",
+		"localProfileKey": "validation-create-profile",
+		"storage_path": _storage_path("create_profile"),
+	})
+	created_facade._client.register_fixture_response("GET", "/api/v1/runtime-config", 200, {
+		"syncPolicy": PROFILE_CREATE_RESPONSE["syncPolicy"],
+	})
+	created_facade._client.register_fixture_response("POST", "/api/v1/profiles", 201, PROFILE_CREATE_RESPONSE)
+	var created: Dictionary = created_facade.create_profile()
+	_expect_equal(created.get("status", ""), "synced", "facade create_profile status")
+	_expect_equal(created_facade.get_profile_session({"includeToken": true}).get("profileSaveId", ""), "sv_profile", "facade create_profile stores session locally")
+
+	created_facade.save_slot("autosave", {"level": 2})
+	var duplicate_create: Dictionary = created_facade.create_profile()
+	_expect_equal(duplicate_create.get("status", ""), "invalid_request", "facade create_profile should reject existing local state")
+
+	var attached_facade: Object = game_saves_script.new()
+	attached_facade.configure({
+		"runtime_key": "ps_test_replace_me",
+		"localProfileKey": "validation-attach-profile",
+		"storage_path": _storage_path("attach_profile"),
+	})
+	attached_facade._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile", 200, PROFILE_CREATE_RESPONSE)
+	var attached: Dictionary = attached_facade.attach_profile("sv_profile", "pst_profile_session")
+	_expect_equal(attached.get("status", ""), "synced", "attach_profile status")
+	_expect_equal(attached_facade.get_profile_session({"includeToken": true}).get("profileSaveId", ""), "sv_profile", "attach_profile stores profile locally")
+
+	attached_facade.save_slot("autosave", {"level": 4})
+	var rejected_attach: Dictionary = attached_facade.attach_profile("sv_other", "pst_other")
+	_expect_equal(rejected_attach.get("status", ""), "invalid_request", "attach_profile should reject dirty local state")
 
 
 func _check_existing_profile_session_loads_remote_profile(game_saves_script: Script) -> void:
@@ -476,6 +552,59 @@ func _check_existing_profile_session_loads_remote_profile(game_saves_script: Scr
 	_expect_dictionary(ensured.get("metadata", {}), PROFILE_SAVE["metadata"], "restored ensure_profile metadata")
 	if persistly._client.get_recorded_requests().is_empty():
 		_fail("ensure_profile with an existing profile session should load the remote profile.")
+
+
+func _check_refresh_slot_pull_and_dirty_conflict(game_saves_script: Script) -> void:
+	var clean_facade: Object = game_saves_script.new()
+	clean_facade.configure({
+		"runtime_key": "ps_test_replace_me",
+		"localProfileKey": "validation-refresh-clean",
+		"profileSaveId": "sv_profile",
+		"profileSessionToken": "pst_profile_session",
+		"storage_path": _storage_path("refresh_clean"),
+	})
+	clean_facade._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile", 200, {
+		"profileSaveId": "sv_profile",
+		"profile": PROFILE_WITH_CHARACTER_SAVE,
+		"syncPolicy": PROFILE_CREATE_RESPONSE["syncPolicy"],
+	})
+	clean_facade._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile/characters/sv_char", 200, {
+		"save": CHARACTER_SAVE,
+	})
+
+	var refreshed: Dictionary = clean_facade.refresh_slot("autosave")
+	_expect_equal(refreshed.get("status", ""), "synced", "refresh_slot clean status")
+	_expect_dictionary(refreshed.get("state", {}), CHARACTER_SAVE["state"], "refresh_slot clean state")
+	_expect_equal(refreshed.get("dirty", true), false, "refresh_slot clean dirty flag")
+
+	var dirty_facade: Object = game_saves_script.new()
+	dirty_facade.configure({
+		"runtime_key": "ps_test_replace_me",
+		"localProfileKey": "validation-refresh-dirty",
+		"profileSaveId": "sv_profile",
+		"profileSessionToken": "pst_profile_session",
+		"storage_path": _storage_path("refresh_dirty"),
+	})
+	dirty_facade._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile", 200, {
+		"profileSaveId": "sv_profile",
+		"profile": PROFILE_WITH_CHARACTER_SAVE,
+		"syncPolicy": PROFILE_CREATE_RESPONSE["syncPolicy"],
+	})
+	dirty_facade._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile/characters/sv_char", 200, {
+		"save": CHARACTER_SAVE,
+	})
+	dirty_facade.save_slot("autosave", {
+		"level": 2,
+		"coins": 20,
+	})
+
+	var conflict: Dictionary = dirty_facade.refresh_slot("autosave")
+	_expect_equal(conflict.get("status", ""), "conflict", "refresh_slot dirty conflict status")
+	_expect_dictionary(conflict.get("localState", {}), {
+		"level": 2,
+		"coins": 20,
+	}, "refresh_slot dirty local state")
+	_expect_dictionary(conflict.get("cloudState", {}), CHARACTER_SAVE["state"], "refresh_slot dirty cloud state")
 
 
 func _check_profile_only_ensure_and_remote_slot_sync(game_saves_script: Script) -> void:
@@ -788,6 +917,97 @@ func _check_archive_and_clear(game_saves_script: Script) -> void:
 	var cleared: Dictionary = persistly.clear_local_slot("autosave")
 	_expect_equal(cleared.get("status", ""), "local_saved", "clear_local_slot status")
 	_expect_equal(persistly.load_slot("autosave").get("status", ""), "not_found", "clear_local_slot removes local slot")
+
+
+func _check_delete_profile_and_slot(game_saves_script: Script) -> void:
+	var local_only: Object = game_saves_script.new()
+	local_only.configure({
+		"runtime_key": "ps_test_replace_me",
+		"localProfileKey": "validation-delete-local",
+		"storage_path": _storage_path("delete_local"),
+	})
+	local_only.save_slot("autosave", {
+		"level": 2,
+	})
+	var local_deleted_slot: Dictionary = local_only.delete_slot("autosave")
+	_expect_equal(local_deleted_slot.get("status", ""), "local_saved", "delete_slot should clear unsynced local slots")
+	_expect_equal(local_only.load_slot("autosave").get("status", ""), "not_found", "delete_slot should remove unsynced local slot data")
+	local_only.save_slot("fresh", {
+		"level": 3,
+	})
+	var local_deleted_profile: Dictionary = local_only.delete_profile()
+	_expect_equal(local_deleted_profile.get("status", ""), "local_saved", "delete_profile should clear unsynced local profile state")
+	_expect_equal(local_only.load_slot("fresh").get("status", ""), "not_found", "delete_profile should remove unsynced local slots")
+
+	var synced: Object = game_saves_script.new()
+	var events: Array = []
+	synced.configure({
+		"runtime_key": "ps_test_replace_me",
+		"profileSaveId": "sv_profile",
+		"profileSessionToken": "pst_profile_session",
+		"localProfileKey": "validation-delete-remote",
+		"storage_path": _storage_path("delete_remote"),
+		"onSyncResult": func(result: Dictionary) -> void:
+			events.append(result),
+	})
+	synced.save_slot("autosave", {
+		"level": 4,
+	}, {
+		"scene": "starter",
+	})
+	synced._slots["autosave"]["characterSaveId"] = "sv_char"
+	synced._slots["autosave"]["version"] = 2
+	synced._client.register_fixture_response("DELETE", "/api/v1/profiles/sv_profile/characters/sv_char", 200, DELETE_CHARACTER_RESPONSE)
+	var deleted_slot: Dictionary = synced.delete_slot("autosave")
+	_expect_equal(deleted_slot.get("status", ""), "synced", "delete_slot should delete synced remote characters")
+	_expect_equal(deleted_slot.get("target", ""), "slot", "delete_slot target")
+	_expect_equal(synced.load_slot("autosave").get("status", ""), "not_found", "delete_slot should remove synced local slot data")
+	_expect_equal(int(synced.profile_version), 5, "delete_slot should refresh local profile version from returned profile payload")
+	if typeof(deleted_slot.get("warnings", null)) != TYPE_ARRAY or not (deleted_slot["warnings"] as Array).has("delete_cleanup_queued"):
+		_fail("delete_slot should surface delete_cleanup_queued warnings when backend cleanup is deferred.")
+
+	synced.save_slot("second", {
+		"level": 6,
+	})
+	synced._client.register_fixture_response("DELETE", "/api/v1/profiles/sv_profile", 200, DELETE_PROFILE_RESPONSE)
+	var deleted_profile: Dictionary = synced.delete_profile()
+	_expect_equal(deleted_profile.get("status", ""), "synced", "delete_profile should delete synced remote profiles")
+	_expect_equal(String(synced.get_profile_session({"includeToken": true}).get("profileSaveId", "")), "", "delete_profile should clear local profile session")
+	_expect_equal(synced.load_slot("second").get("status", ""), "not_found", "delete_profile should wipe local slots after remote delete")
+	if events.size() < 2:
+		_fail("delete profile + slot should notify onSyncResult for both operations.")
+
+
+func _check_clear_local_profile(game_saves_script: Script) -> void:
+	var persistly: Object = game_saves_script.new()
+	persistly.configure({
+		"runtime_key": "ps_test_replace_me",
+		"profileSaveId": "sv_old_profile",
+		"profileSessionToken": "pst_old_session",
+		"localProfileKey": "validation-clear-profile",
+		"storage_path": _storage_path("clear_profile"),
+	})
+	persistly.save_slot("autosave", {
+		"level": 5,
+	})
+	var cleared: Dictionary = persistly.clear_local_profile()
+	_expect_equal(cleared.get("status", ""), "local_saved", "clear_local_profile status")
+	_expect_equal(String(persistly.get_profile_session({"includeToken": true}).get("profileSaveId", "")), "", "clear_local_profile removes local profileSaveId")
+	_expect_equal(String(persistly.get_profile_session({"includeToken": true}).get("profileSessionToken", "")), "", "clear_local_profile removes local profile session token")
+	_expect_equal(persistly.load_slot("autosave").get("status", ""), "not_found", "clear_local_profile removes local slots")
+
+	persistly._client.clear_recorded_requests()
+	persistly._client.register_fixture_response("POST", "/api/v1/profiles", 201, FIRST_PROFILE_CREATE_WITH_CHARACTER_RESPONSE)
+	persistly.save_slot("fresh", {
+		"level": 9,
+	})
+	var synced: Dictionary = persistly.force_sync("fresh", {
+		"bypassCooldown": true,
+	})
+	_expect_equal(synced.get("status", ""), "synced", "clear_local_profile allows fresh profile bootstrap")
+	var requests: Array = persistly._client.get_recorded_requests()
+	if requests.is_empty() or requests[0].get("path", "") != "/api/v1/profiles":
+		_fail("clear_local_profile should force the next sync to create a fresh profile instead of reusing the old stored session.")
 
 
 func _check_archived_slot_can_be_reused(game_saves_script: Script) -> void:

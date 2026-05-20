@@ -21,9 +21,20 @@ persistly.save_slot("autosave", {
 
 var loaded := persistly.load_slot("autosave")
 var synced := persistly.force_sync("autosave", {"bypassCooldown": true})
+
+# After restoring an existing profile session on another device:
+var refreshed := persistly.refresh_slot("autosave")
 ```
 
-`save_slot` writes locally first. The first remote sync creates the Persistly profile and matching character slot if needed.
+`save_slot` writes locally first and guarantees a local profile envelope exists. The first remote sync creates the Persistly profile and matching character slot if needed.
+
+Use `clear_local_profile()` to wipe the local profile session plus all local slots for the current namespace before switching players on the same device.
+
+For explicit profile-first flows, use `create_profile()` to create one facade-managed Persistly profile, or `attach_profile(profileSaveId, profileSessionToken)` to load an already existing Persistly profile into empty local state.
+
+Use `inspect_profile()` and `get_account_data()` for account-wide state such as bundles, shared inventory, settings, or display currency balances. `patch_account_data()` shallow-merges top-level keys and deletes a top-level key when its patch value is `null`.
+
+Use `delete_slot(slotKey)` for JS-style delete parity: unsynced slots clear locally, synced slots delete the remote profile character and remove local state. Use `delete_profile()` to clear local-only state or remotely delete the synced profile and then wipe local session plus slots.
 
 ## Install
 

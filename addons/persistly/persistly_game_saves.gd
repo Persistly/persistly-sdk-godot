@@ -89,6 +89,36 @@ func configure(settings: Dictionary) -> Dictionary:
 	}
 
 
+func create_profile() -> Dictionary:
+	var preflight := _validate_configured("create_profile")
+	if not preflight.is_empty():
+		return preflight
+	var local_state_error := _ensure_no_existing_local_profile_state(
+		"create_profile requires empty local profile state. Call clear_local_profile before creating a different profile."
+	)
+	if not local_state_error.is_empty():
+		return local_state_error
+	return ensure_profile()
+
+
+func attach_profile(profile_save_id_value: String, profile_session_token_value: String) -> Dictionary:
+	var preflight := _validate_configured("attach_profile")
+	if not preflight.is_empty():
+		return preflight
+	if profile_save_id_value.strip_edges().is_empty() or profile_session_token_value.strip_edges().is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "attach_profile requires non-empty profile_save_id and profile_session_token.")
+	var local_state_error := _ensure_no_existing_local_profile_state(
+		"attach_profile requires empty local profile state. Call clear_local_profile before attaching a different profile."
+	)
+	if not local_state_error.is_empty():
+		return local_state_error
+	profile_save_id = profile_save_id_value.strip_edges()
+	profile_session_token = profile_session_token_value.strip_edges()
+	_dirty_profile = false
+	_persist_profile()
+	return _restore_profile(false)
+
+
 func ensure_profile() -> Dictionary:
 	var preflight := _validate_configured("ensure_profile")
 	if not preflight.is_empty():
@@ -133,6 +163,10 @@ func get_profile_session(options: Dictionary = {}) -> Dictionary:
 	if bool(options.get("includeToken", options.get("include_token", false))):
 		result["profileSessionToken"] = profile_session_token
 	return result
+
+
+func inspect_profile() -> Dictionary:
+	return _profile_result(PersistlyGameSaveStatus.LOCAL_FOUND, false)
 
 
 func get_account_data() -> Dictionary:
@@ -243,6 +277,62 @@ func inspect_slot(slot_key: String) -> Dictionary:
 	return load_slot(slot_key)
 
 
+func refresh_slot(slot_key: String) -> Dictionary:
+	var preflight := _validate_configured("refresh_slot")
+	if not preflight.is_empty():
+		return preflight
+	var slot_error := _validate_slot_key(slot_key, "refresh_slot")
+	if not slot_error.is_empty():
+		return slot_error
+	if profile_save_id.is_empty() or profile_session_token.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "refresh_slot requires an existing profile session.", {
+			"slotKey": slot_key,
+		})
+
+	var restored := _restore_profile(true)
+	if restored.has("error"):
+		return restored
+	if not _slots.has(slot_key):
+		return {
+			"status": PersistlyGameSaveStatus.NOT_FOUND,
+			"target": PersistlyGameSaveTarget.SLOT,
+			"slotKey": slot_key,
+			"found": false,
+		}
+
+	var slot: Dictionary = _slots[slot_key]
+	var character_save_id := String(slot.get("characterSaveId", ""))
+	if character_save_id.is_empty() or bool(slot.get("archived", false)):
+		return {
+			"status": PersistlyGameSaveStatus.NOT_FOUND,
+			"target": PersistlyGameSaveTarget.SLOT,
+			"slotKey": slot_key,
+			"found": false,
+		}
+
+	var loaded: Dictionary = _client.load_profile_character(profile_save_id, profile_session_token, character_save_id)
+	if loaded.has("error"):
+		return _map_remote_error(loaded, PersistlyGameSaveTarget.SLOT, slot_key)
+
+	var save: Dictionary = loaded.get("save", loaded)
+	if bool(slot.get("dirty", false)):
+		var conflict_result := _record_slot_conflict(slot_key, {
+			"save": save,
+			"details": {
+				"reason": "remote_changed",
+			},
+		})
+		_notify_sync_result(conflict_result)
+		return conflict_result
+
+	_apply_character_save_to_slot(slot_key, save)
+	var refreshed_slot: Dictionary = _slots[slot_key]
+	refreshed_slot["state"] = _duplicate_dictionary(save.get("state", {}))
+	refreshed_slot["metadata"] = _developer_metadata(save.get("metadata", {}))
+	_slots[slot_key] = refreshed_slot
+	return _finalize_synced_slot(slot_key, loaded)
+
+
 func force_sync(slot_key: String, options: Dictionary = {}) -> Dictionary:
 	return _sync_slot(slot_key, options, true, false)
 
@@ -301,6 +391,103 @@ func archive_slot(slot_key: String) -> Dictionary:
 	result["target"] = PersistlyGameSaveTarget.SLOT
 	_notify_sync_result(result)
 	return result
+
+
+func delete_profile() -> Dictionary:
+	var preflight := _validate_configured("delete_profile")
+	if not preflight.is_empty():
+		return preflight
+
+	if profile_save_id.is_empty() or profile_session_token.is_empty():
+		return clear_local_profile()
+
+	var deleted: Dictionary = _client.delete_profile(profile_save_id, profile_session_token)
+	if deleted.has("error"):
+		return _map_remote_error(deleted, PersistlyGameSaveTarget.PROFILE)
+
+	var warnings: Array = []
+	if bool(deleted.get("cleanupQueued", false)):
+		warnings.append("delete_cleanup_queued")
+	var cleared := clear_local_profile()
+	cleared["status"] = PersistlyGameSaveStatus.SYNCED
+	if not warnings.is_empty():
+		cleared["warnings"] = warnings.duplicate(true)
+	_notify_sync_result(cleared)
+	return cleared
+
+
+func delete_slot(slot_key: String) -> Dictionary:
+	var preflight := _validate_configured("delete_slot")
+	if not preflight.is_empty():
+		return preflight
+	var slot_error := _validate_slot_key(slot_key, "delete_slot")
+	if not slot_error.is_empty():
+		return slot_error
+	if not _slots.has(slot_key):
+		return {
+			"status": PersistlyGameSaveStatus.NO_CHANGES,
+			"slotKey": slot_key,
+			"target": PersistlyGameSaveTarget.SLOT,
+		}
+
+	var slot: Dictionary = _slots[slot_key]
+	var character_save_id := String(slot.get("characterSaveId", ""))
+	if character_save_id.is_empty():
+		return clear_local_slot(slot_key)
+
+	if profile_save_id.is_empty() or profile_session_token.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "delete_slot requires an existing profile session for synced characters.", {
+			"slotKey": slot_key,
+		})
+
+	var deleted: Dictionary = _client.delete_profile_character(profile_save_id, profile_session_token, character_save_id)
+	if deleted.has("error"):
+		return _map_remote_error(deleted, PersistlyGameSaveTarget.SLOT, slot_key)
+
+	_slots.erase(slot_key)
+	_remove_slot_file(slot_key)
+	_persist_slot_index()
+	if deleted.has("profile"):
+		_apply_profile_save(deleted["profile"])
+		_persist_profile()
+	var result := {
+		"status": PersistlyGameSaveStatus.SYNCED,
+		"slotKey": slot_key,
+		"target": PersistlyGameSaveTarget.SLOT,
+	}
+	if deleted.has("profile"):
+		result["profile"] = _duplicate_dictionary(deleted["profile"])
+	if bool(deleted.get("cleanupQueued", false)):
+		result["warnings"] = ["delete_cleanup_queued"]
+	_notify_sync_result(result)
+	return result
+
+
+func clear_local_profile() -> Dictionary:
+	var preflight := _validate_configured("clear_local_profile")
+	if not preflight.is_empty():
+		return preflight
+	for slot_key in _slots.keys():
+		_remove_slot_file(String(slot_key))
+	_slots.clear()
+	profile_save_id = ""
+	profile_session_token = ""
+	profile_metadata = {}
+	account_data = {}
+	profile_version = 0
+	sync_policy = _default_sync_policy()
+	_dirty_profile = false
+	_profile_last_synced_msec = 0
+	_profile_updated_at_unix = 0.0
+	_persist_profile()
+	_persist_slot_index()
+	return {
+		"status": PersistlyGameSaveStatus.LOCAL_SAVED,
+		"target": PersistlyGameSaveTarget.PROFILE,
+		"profileSaveId": "",
+		"localProfileKey": local_profile_key,
+		"dirty": false,
+	}
 
 
 func clear_local_slot(slot_key: String) -> Dictionary:
@@ -747,6 +934,21 @@ func _map_remote_error(remote_error: Dictionary, target: String, slot_key: Strin
 	if not slot_key.is_empty():
 		result["slotKey"] = slot_key
 	return result
+
+
+func _ensure_no_existing_local_profile_state(message: String) -> Dictionary:
+	if not _is_blank_local_profile_state() or not _slots.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, message)
+	return {}
+
+
+func _is_blank_local_profile_state() -> bool:
+	return profile_save_id.is_empty() \
+		and profile_session_token.is_empty() \
+		and profile_metadata.is_empty() \
+		and account_data.is_empty() \
+		and not _dirty_profile \
+		and profile_version == 0
 
 
 func _notify_sync_result(result: Dictionary) -> void:

@@ -16,7 +16,10 @@ const ERROR_NOT_FOUND := "not_found"
 const ERROR_CONFLICT := "conflict"
 const ERROR_SLOT_ALREADY_EXISTS := "slot_already_exists"
 const ERROR_CHARACTER_ARCHIVED := "character_archived"
+const ERROR_PROFILE_DELETED := "profile_deleted"
+const ERROR_CHARACTER_DELETED := "character_deleted"
 const ERROR_RATE_LIMITED := "rate_limited"
+const ERROR_MONTHLY_QUOTA_EXCEEDED := "monthly_quota_exceeded"
 const ERROR_PAYLOAD_TOO_LARGE := "payload_too_large"
 const ERROR_SERVER := "server_error"
 
@@ -738,7 +741,10 @@ func _profile_state_from_sync(profile_save_id: String, request_body: Dictionary)
 	elif request_body.has("accountDataPatch"):
 		account_data = (cached_state.get("accountData", {}) as Dictionary).duplicate(true) if typeof(cached_state.get("accountData", {})) == TYPE_DICTIONARY else {}
 		for key in (request_body["accountDataPatch"] as Dictionary).keys():
-			account_data[key] = request_body["accountDataPatch"][key]
+			if request_body["accountDataPatch"][key] == null:
+				account_data.erase(key)
+			else:
+				account_data[key] = request_body["accountDataPatch"][key]
 	else:
 		account_data = (cached_state.get("accountData", {}) as Dictionary).duplicate(true) if typeof(cached_state.get("accountData", {})) == TYPE_DICTIONARY else {}
 	var character_slots: Array = (cached_state.get("characterSlots", []) as Array).duplicate(true) if typeof(cached_state.get("characterSlots", [])) == TYPE_ARRAY else []
@@ -977,6 +983,10 @@ func _error_code_for_status(status_code: int) -> String:
 			return ERROR_NOT_FOUND
 		409:
 			return ERROR_CONFLICT
+		410:
+			return ERROR_PROFILE_DELETED
+		402:
+			return ERROR_MONTHLY_QUOTA_EXCEEDED
 		413:
 			return ERROR_PAYLOAD_TOO_LARGE
 		429:

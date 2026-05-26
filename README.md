@@ -4,12 +4,12 @@ Godot runtime SDK for Persistly game-friendly slot saves, profile saves, profile
 
 Persistly is a lightweight cloud save backend for games. The recommended Godot flow is:
 
-1. Start with `PersistlyGameSaves` and named slots such as `autosave`.
+1. Start with `PersistlyGameSaves` and the one-save `save_data`/`load_data` helpers.
 2. Save gameplay state locally first.
-3. Load by slot key when the game resumes.
+3. Load the default `autosave` data when the game resumes.
 4. Force sync at safe moments or on explicit player action.
 
-Raw `PersistlyClient` profile and save APIs remain available for advanced runtime integrations and migrations.
+Named slot helpers such as `save_slot("manual-1", ...)` remain available for games with multiple manual saves or character slots. Raw `PersistlyClient` profile and save APIs remain available for advanced runtime integrations and migrations.
 
 ## Install
 
@@ -50,12 +50,12 @@ persistly.configure({
 	"localProfileKey": "player-184",
 })
 
-persistly.save_slot("autosave", {"level": 5, "coins": 1200}, {"scene": "starter"})
-var loaded := persistly.load_slot("autosave")
-var synced := persistly.force_sync("autosave", {"bypassCooldown": true})
+persistly.save_data({"level": 5, "coins": 1200}, {"scene": "starter"})
+var loaded := persistly.load_data()
+var synced := persistly.force_sync_data({"bypassCooldown": true})
 ```
 
-`save_slot` writes local gameplay state immediately and guarantees a local profile envelope exists. The first `force_sync`, `sync_due_slots`, or `sync_due` call creates the remote Persistly profile and the matching character slot if needed. The SDK keeps local/cloud conflict state separate until the game chooses a resolution.
+`save_data` writes local gameplay state immediately to the default `autosave` slot and guarantees a local profile envelope exists. The first `force_sync_data`, `sync_due_slots`, or `sync_due` call creates the remote Persistly profile and the matching character slot if needed. The SDK keeps local/cloud conflict state separate until the game chooses a resolution. Use `save_slot`, `load_slot`, and `force_sync` when your game needs multiple named slots.
 
 For profile-first games, create the profile before character selection:
 

@@ -4,6 +4,7 @@ class_name PersistlyGameSaves
 const CLIENT_SCRIPT := preload("res://addons/persistly/persistly_client.gd")
 
 const DEFAULT_BASE_URL := "https://api.persistly.app"
+const DEFAULT_SLOT_KEY := "autosave"
 const DEFAULT_SYNC_INTERVAL_SECONDS := 60.0
 const DEFAULT_STORAGE_PATH := "user://persistly_game_saves"
 const PROFILE_SCHEMA := "persistly.godot.profile.v1"
@@ -197,6 +198,26 @@ func patch_account_data(partial_account_data: Dictionary) -> Dictionary:
 		else:
 			patched[key] = partial_account_data[key]
 	return save_account_data(patched)
+
+
+func save_data(state: Dictionary, metadata: Dictionary = {}) -> Dictionary:
+	return save_slot(DEFAULT_SLOT_KEY, state, metadata)
+
+
+func load_data() -> Dictionary:
+	return load_slot(DEFAULT_SLOT_KEY)
+
+
+func inspect_data() -> Dictionary:
+	return inspect_slot(DEFAULT_SLOT_KEY)
+
+
+func refresh_data() -> Dictionary:
+	return refresh_slot(DEFAULT_SLOT_KEY)
+
+
+func force_sync_data(options: Dictionary = {}) -> Dictionary:
+	return force_sync(DEFAULT_SLOT_KEY, options)
 
 
 func force_sync_profile(options: Dictionary = {}) -> Dictionary:
@@ -502,6 +523,18 @@ func clear_local_slot(slot_key: String) -> Dictionary:
 		"slotKey": slot_key,
 		"target": PersistlyGameSaveTarget.SLOT,
 	}
+
+
+func accept_cloud_data() -> Dictionary:
+	return accept_cloud_version(DEFAULT_SLOT_KEY)
+
+
+func overwrite_cloud_data(options: Dictionary = {}) -> Dictionary:
+	return overwrite_cloud_version(DEFAULT_SLOT_KEY, options)
+
+
+func keep_local_data_for_later() -> Dictionary:
+	return keep_local_for_later(DEFAULT_SLOT_KEY)
 
 
 func accept_cloud_version(slot_key: String) -> Dictionary:

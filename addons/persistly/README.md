@@ -14,19 +14,19 @@ persistly.configure({
   "localProfileKey": "player-184",
 })
 
-persistly.save_slot("autosave", {
+persistly.save_data({
   "level": 5,
   "coins": 1200,
 })
 
-var loaded := persistly.load_slot("autosave")
-var synced := persistly.force_sync("autosave", {"bypassCooldown": true})
+var loaded := persistly.load_data()
+var synced := persistly.force_sync_data({"bypassCooldown": true})
 
 # After restoring an existing profile session on another device:
-var refreshed := persistly.refresh_slot("autosave")
+var refreshed := persistly.refresh_data()
 ```
 
-`save_slot` writes locally first and guarantees a local profile envelope exists. The first remote sync creates the Persistly profile and matching character slot if needed.
+`save_data` writes locally first to the default `autosave` slot and guarantees a local profile envelope exists. The first remote sync creates the Persistly profile and matching character slot if needed. Use `save_slot`, `load_slot`, and `force_sync` when your game needs multiple named slots.
 
 Use `clear_local_profile()` to wipe the local profile session plus all local slots for the current namespace before switching players on the same device.
 

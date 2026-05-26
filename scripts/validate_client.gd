@@ -213,6 +213,13 @@ const ACCOUNT_DATA_SYNC_RESPONSE := {
 	},
 }
 
+const LIGHTWEIGHT_ACCOUNT_DATA_SYNC_RESPONSE := {
+	"status": "accepted",
+	"version": 4,
+	"updatedAt": "2026-04-09T10:04:00Z",
+	"historyRetained": true,
+}
+
 const ARCHIVE_RESPONSE := {
 	"profileSaveId": "sv_profile",
 	"profile": {
@@ -293,7 +300,7 @@ const RUNTIME_CONFIG_RESPONSE := {
 		"sizeBytes": 37,
 		"hasData": true,
 		"eventName": "launch",
-		"config": {
+		"data": {
 			"season": "spring",
 		},
 	},
@@ -333,6 +340,9 @@ func _initialize() -> void:
 func _check_versions(client_script: GDScript) -> void:
 	_expect_equal(client_script.SDK_VERSION, "1.0.0", "SDK_VERSION")
 	_expect_equal(client_script.BUNDLE_VERSION, "persistly-contract-v0.3.0", "BUNDLE_VERSION")
+	_expect_equal(client_script.ERROR_PROFILE_DELETED, "profile_deleted", "ERROR_PROFILE_DELETED")
+	_expect_equal(client_script.ERROR_CHARACTER_DELETED, "character_deleted", "ERROR_CHARACTER_DELETED")
+	_expect_equal(client_script.ERROR_MONTHLY_QUOTA_EXCEEDED, "monthly_quota_exceeded", "ERROR_MONTHLY_QUOTA_EXCEEDED")
 
 
 func _check_create_save(client: Object) -> void:
@@ -598,6 +608,31 @@ func _check_account_data_sync(client: Object) -> void:
 	if typeof(state) != TYPE_DICTIONARY or not state.has("characterSlots"):
 		_fail("sync_profile_account_data should preserve characterSlots in profile state.")
 
+	var cached_profile: Dictionary = ACCOUNT_DATA_SYNC_RESPONSE["save"].duplicate(true)
+	cached_profile["state"] = (ACCOUNT_DATA_SYNC_RESPONSE["save"]["state"] as Dictionary).duplicate(true)
+	cached_profile["state"]["accountData"] = {
+		"diamonds": 30,
+		"obsolete": "remove-me",
+	}
+	client._save_cache["sv_profile"] = cached_profile
+	var lightweight = client.sync_profile_account_data("sv_profile", "pst_profile_session", {
+		"baseVersion": 3,
+		"accountDataPatch": {
+			"diamonds": 35,
+			"obsolete": null,
+		},
+	})
+	if typeof(lightweight) != TYPE_DICTIONARY or lightweight.get("status", "") != "accepted":
+		_fail("sync_profile_account_data should accept lightweight sync responses.")
+		return
+	var lightweight_state = lightweight.get("save", {}).get("state", {})
+	if typeof(lightweight_state) != TYPE_DICTIONARY:
+		_fail("lightweight account-data sync should synthesize profile state.")
+	elif (lightweight_state.get("accountData", {}) as Dictionary).has("obsolete"):
+		_fail("lightweight account-data sync should delete accountDataPatch keys set to null.")
+	elif int(lightweight_state.get("accountData", {}).get("diamonds", 0)) != 35:
+		_fail("lightweight account-data sync should apply accountDataPatch changes.")
+
 
 func _check_archive(client: Object) -> void:
 	var result = client.archive_profile_character("sv_profile", "pst_profile_session", "sv_char")
@@ -704,6 +739,19 @@ func _check_error_mapping(client: Object) -> void:
 		},
 	})
 	_expect_error_code(rate_limited, "rate_limited", "create_save should map 429 to rate_limited")
+
+	var monthly_quota = client.create_save({
+		"state": {
+			"simulate": "monthly_quota",
+		},
+	})
+	_expect_error_code(monthly_quota, "monthly_quota_exceeded", "create_save should preserve monthly quota typed errors")
+
+	var deleted_profile = client.load_profile("sv_deleted", "pst_profile_session")
+	_expect_error_code(deleted_profile, "profile_deleted", "load_profile should preserve deleted-profile typed errors")
+
+	var deleted_character = client.load_profile_character("sv_profile", "pst_profile_session", "sv_char_deleted")
+	_expect_error_code(deleted_character, "character_deleted", "load_profile_character should preserve deleted-character typed errors")
 
 
 func _check_cache_update(client: Object) -> void:
@@ -865,9 +913,21 @@ func _seed_fixture_responses(client: Object) -> void:
 		"profileSaveId": "sv_profile",
 		"profile": PROFILE_WITH_CHARACTER_SAVE,
 	})
+	client.register_fixture_response("GET", "/api/v1/profiles/sv_deleted", 410, {
+		"error": {
+			"code": "profile_deleted",
+			"message": "Profile was deleted.",
+		},
+	})
 	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters", 201, CREATE_PROFILE_WITH_CHARACTER_RESPONSE)
 	client.register_fixture_response("GET", "/api/v1/profiles/sv_profile/characters/sv_char", 200, {
 		"save": CHARACTER_SAVE,
+	})
+	client.register_fixture_response("GET", "/api/v1/profiles/sv_profile/characters/sv_char_deleted", 410, {
+		"error": {
+			"code": "character_deleted",
+			"message": "Character was deleted.",
+		},
 	})
 	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/sync", 200, SYNC_ACCEPTED_RESPONSE)
 	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters", 409, {
@@ -889,7 +949,19 @@ func _seed_fixture_responses(client: Object) -> void:
 		},
 	})
 	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/account-data/sync", 200, ACCOUNT_DATA_SYNC_RESPONSE)
+	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/account-data/sync", 200, LIGHTWEIGHT_ACCOUNT_DATA_SYNC_RESPONSE)
 	client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/archive", 200, ARCHIVE_RESPONSE)
 	client.register_fixture_response("DELETE", "/api/v1/profiles/sv_profile/characters/sv_char", 200, DELETE_PROFILE_CHARACTER_RESPONSE)
 	client.register_fixture_response("DELETE", "/api/v1/profiles/sv_profile", 200, DELETE_PROFILE_RESPONSE)
 	client.register_fixture_response("GET", "/api/v1/runtime-config?gameConfigVersion=2", 200, RUNTIME_CONFIG_RESPONSE)
+	client.register_fixture_response("POST", "/api/v1/saves", 402, {
+		"error": {
+			"code": "monthly_quota_exceeded",
+			"message": "Monthly runtime request quota exceeded.",
+			"details": {
+				"planTier": "free",
+				"used": 100000,
+				"limit": 100000,
+			},
+		},
+	})

@@ -354,6 +354,7 @@ func _initialize() -> void:
 	_check_status_and_target_constants(game_saves_script)
 	_check_not_configured(game_saves_script)
 	_check_configured_local_slot_flow(game_saves_script)
+	_check_default_data_aliases(game_saves_script)
 	_check_profile_session_and_account_data(game_saves_script)
 	_check_facade_create_and_attach_profile(game_saves_script)
 	_check_existing_profile_session_loads_remote_profile(game_saves_script)
@@ -374,6 +375,7 @@ func _initialize() -> void:
 
 
 func _check_status_and_target_constants(game_saves_script: Script) -> void:
+	_expect_equal(game_saves_script.DEFAULT_SLOT_KEY, "autosave", "PersistlyGameSaves.DEFAULT_SLOT_KEY")
 	var status = game_saves_script.PersistlyGameSaveStatus
 	_expect_equal(status.LOCAL_SAVED, "local_saved", "PersistlyGameSaveStatus.LOCAL_SAVED")
 	_expect_equal(status.LOCAL_FOUND, "local_found", "PersistlyGameSaveStatus.LOCAL_FOUND")
@@ -456,6 +458,61 @@ func _check_configured_local_slot_flow(game_saves_script: Script) -> void:
 	var inspected: Dictionary = persistly.inspect_slot("autosave")
 	if inspected.get("status", "") != "local_found" or not inspected.has("updatedAtUnix"):
 		_fail("inspect_slot should expose local slot metadata without a network request.")
+
+
+func _check_default_data_aliases(game_saves_script: Script) -> void:
+	var persistly: Object = game_saves_script.new()
+	persistly.configure({
+		"runtime_key": "ps_test_replace_me",
+		"playerRef": "player-184",
+		"localProfileKey": "validation-data-aliases",
+		"storage_path": _storage_path("data_aliases"),
+	})
+	persistly._client.register_fixture_response("POST", "/api/v1/profiles", 201, FIRST_PROFILE_CREATE_WITH_CHARACTER_RESPONSE)
+
+	var saved: Dictionary = persistly.save_data({
+		"level": 5,
+		"coins": 1200,
+	}, {
+		"scene": "starter",
+	})
+	_expect_equal(saved.get("status", ""), "local_saved", "save_data status")
+	_expect_equal(saved.get("slotKey", ""), "autosave", "save_data default slot")
+	_expect_dictionary(persistly.load_data().get("state", {}), {
+		"level": 5,
+		"coins": 1200,
+	}, "load_data state")
+	_expect_equal(persistly.inspect_data().get("slotKey", ""), "autosave", "inspect_data default slot")
+
+	var synced: Dictionary = persistly.force_sync_data({
+		"bypassCooldown": true,
+	})
+	_expect_equal(synced.get("status", ""), "synced", "force_sync_data status")
+	_expect_equal(synced.get("slotKey", ""), "autosave", "force_sync_data default slot")
+
+	persistly.save_data({
+		"level": 9,
+	}, {
+		"scene": "local",
+	})
+	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/sync", 409, SYNC_CONFLICT_RESPONSE)
+	var conflict: Dictionary = persistly.force_sync_data({
+		"bypassCooldown": true,
+	})
+	_expect_equal(conflict.get("status", ""), "conflict", "force_sync_data conflict status")
+	var kept: Dictionary = persistly.keep_local_data_for_later()
+	_expect_equal(kept.get("dirty", false), true, "keep_local_data_for_later keeps autosave dirty")
+	var accepted: Dictionary = persistly.accept_cloud_data()
+	_expect_equal(accepted.get("status", ""), "synced", "accept_cloud_data status")
+	persistly.save_data({
+		"level": 10,
+	})
+	persistly._slots["autosave"]["cloudVersion"] = 4
+	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/sync", 200, SYNC_ACCEPTED_RESPONSE)
+	var overwritten: Dictionary = persistly.overwrite_cloud_data({
+		"bypassCooldown": true,
+	})
+	_expect_equal(overwritten.get("status", ""), "synced", "overwrite_cloud_data status")
 
 
 func _check_profile_session_and_account_data(game_saves_script: Script) -> void:

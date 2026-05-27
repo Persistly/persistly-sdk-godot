@@ -3,7 +3,7 @@ class_name PersistlyGameSaves
 
 const CLIENT_SCRIPT := preload("res://addons/persistly/persistly_client.gd")
 
-const DEFAULT_BASE_URL := "https://api.persistly.app"
+const PERSISTLY_API_ORIGIN := "https://api.persistly.app"
 const DEFAULT_SLOT_KEY := "autosave"
 const DEFAULT_SYNC_INTERVAL_SECONDS := 60.0
 const DEFAULT_STORAGE_PATH := "user://persistly_game_saves"
@@ -16,7 +16,6 @@ const ERROR_INVALID_REQUEST := "invalid_request"
 const ERROR_NOT_FOUND := "not_found"
 const ERROR_STORAGE := "storage_error"
 
-var base_url: String = DEFAULT_BASE_URL
 var runtime_key: String = ""
 var sync_interval_seconds: float = DEFAULT_SYNC_INTERVAL_SECONDS
 var player_ref: Variant = null
@@ -40,10 +39,6 @@ var _on_sync_result: Callable = Callable()
 
 
 func configure(settings: Dictionary) -> Dictionary:
-	base_url = String(_setting(settings, "base_url", "baseUrl", DEFAULT_BASE_URL)).strip_edges().rstrip("/")
-	if base_url.is_empty():
-		base_url = DEFAULT_BASE_URL
-
 	runtime_key = String(_setting(settings, "runtime_key", "runtimeKey", "")).strip_edges()
 	sync_interval_seconds = max(float(_setting(settings, "sync_interval_seconds", "syncIntervalSeconds", DEFAULT_SYNC_INTERVAL_SECONDS)), 1.0)
 	player_ref = _setting(settings, "player_ref", "playerRef", null)
@@ -54,7 +49,7 @@ func configure(settings: Dictionary) -> Dictionary:
 		local_profile_key = _resolve_local_profile_key()
 	_profile_root = _storage_path.path_join(local_profile_key.uri_encode())
 
-	_client.configure(base_url, runtime_key, sync_interval_seconds)
+	_client.configure_runtime_key(runtime_key, sync_interval_seconds)
 
 	if settings.has("onSyncResult") and settings["onSyncResult"] is Callable:
 		_on_sync_result = settings["onSyncResult"]
@@ -83,7 +78,6 @@ func configure(settings: Dictionary) -> Dictionary:
 
 	return {
 		"status": "configured",
-		"baseUrl": base_url,
 		"syncIntervalSeconds": sync_interval_seconds,
 		"localProfileKey": local_profile_key,
 		"profileSaveId": profile_save_id,

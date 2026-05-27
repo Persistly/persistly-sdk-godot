@@ -65,10 +65,6 @@ func passive_scrap_per_second() -> float:
 	return _passive_scrap_per_second()
 
 
-func charge_rate_per_second() -> float:
-	return _charge_rate_per_second()
-
-
 func to_save_state() -> Dictionary:
 	return {
 		"scrap": scrap,

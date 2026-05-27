@@ -4,7 +4,7 @@ class_name PersistlyClient
 const SDK_VERSION := "1.0.0"
 const BUNDLE_VERSION := "persistly-contract-v0.3.0"
 const BUNDLE_ROOT := "res://contracts/persistly-contract-v0.3.0"
-const DEFAULT_BASE_URL := "https://api.persistly.app"
+const PERSISTLY_API_ORIGIN := "https://api.persistly.app"
 const DEFAULT_TIMEOUT_SECONDS := 30.0
 const METADATA_MAX_BYTES := 16384
 const STATE_MAX_BYTES := 262144
@@ -23,7 +23,7 @@ const ERROR_MONTHLY_QUOTA_EXCEEDED := "monthly_quota_exceeded"
 const ERROR_PAYLOAD_TOO_LARGE := "payload_too_large"
 const ERROR_SERVER := "server_error"
 
-var base_url: String
+var _api_origin: String = PERSISTLY_API_ORIGIN
 var runtime_key: String
 var timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
 
@@ -32,20 +32,14 @@ var _fixture_responses: Dictionary = {}
 var _recorded_requests: Array = []
 
 
-func _init(base_url_value: String = DEFAULT_BASE_URL, runtime_key_value: String = "", timeout_seconds_value: float = DEFAULT_TIMEOUT_SECONDS) -> void:
-	base_url = _normalize_base_url(base_url_value)
-	runtime_key = runtime_key_value
-	timeout_seconds = max(timeout_seconds_value, 1.0)
-
-
-func configure(base_url_value: String, runtime_key_value: String, timeout_seconds_value: float = DEFAULT_TIMEOUT_SECONDS) -> void:
-	base_url = _normalize_base_url(base_url_value)
+func _init(runtime_key_value: String = "", timeout_seconds_value: float = DEFAULT_TIMEOUT_SECONDS) -> void:
 	runtime_key = runtime_key_value
 	timeout_seconds = max(timeout_seconds_value, 1.0)
 
 
 func configure_runtime_key(runtime_key_value: String, timeout_seconds_value: float = DEFAULT_TIMEOUT_SECONDS) -> void:
-	configure(DEFAULT_BASE_URL, runtime_key_value, timeout_seconds_value)
+	runtime_key = runtime_key_value
+	timeout_seconds = max(timeout_seconds_value, 1.0)
 
 
 func create_save(payload: Dictionary) -> Dictionary:
@@ -442,10 +436,6 @@ func register_fixture_response(method: String, path: String, status_code: int, b
 	})
 
 
-func clear_fixture_responses() -> void:
-	_fixture_responses.clear()
-
-
 func get_recorded_requests() -> Array:
 	return _recorded_requests.duplicate(true)
 
@@ -503,8 +493,8 @@ func _is_valid_slot_key(slot_key: String) -> bool:
 
 
 func _validate_runtime_configuration(action: String) -> Dictionary:
-	if base_url.is_empty():
-		return _error_result(ERROR_INVALID_REQUEST, "PersistlyClient requires base_url before calling " + action + ".")
+	if _api_origin.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "PersistlyClient requires an API origin before calling " + action + ".")
 	if runtime_key.is_empty():
 		return _error_result(ERROR_UNAUTHORIZED, "PersistlyClient requires runtime_key before calling " + action + ".")
 	return {}
@@ -521,11 +511,6 @@ func _validate_profile_session_configuration(action: String, profile_save_id: St
 	return {}
 
 
-func _normalize_base_url(value: String) -> String:
-	var normalized := value.strip_edges().rstrip("/")
-	return DEFAULT_BASE_URL if normalized.is_empty() else normalized
-
-
 func _request_json(method: String, path: String, body: Variant = null, profile_session_token: String = "") -> Dictionary:
 	var headers := _request_headers(profile_session_token)
 	_record_request(method, path, body, profile_session_token, headers)
@@ -533,7 +518,7 @@ func _request_json(method: String, path: String, body: Variant = null, profile_s
 	if not fixture.is_empty():
 		return _parse_transport_response(int(fixture.get("status_code", 500)), String(fixture.get("body", "")))
 
-	var url_parts := _parse_base_url()
+	var url_parts := _parse_api_origin()
 	if url_parts.has("error"):
 		return url_parts
 
@@ -603,16 +588,16 @@ func _record_request(method: String, path: String, body: Variant, profile_sessio
 	})
 
 
-func _parse_base_url() -> Dictionary:
+func _parse_api_origin() -> Dictionary:
 	var protocol := ""
-	if base_url.begins_with("https://"):
+	if _api_origin.begins_with("https://"):
 		protocol = "https"
-	elif base_url.begins_with("http://"):
+	elif _api_origin.begins_with("http://"):
 		protocol = "http"
 	else:
-		return _error_result(ERROR_INVALID_REQUEST, "PersistlyClient base_url must start with http:// or https://.")
+		return _error_result(ERROR_INVALID_REQUEST, "PersistlyClient API origin must start with http:// or https://.")
 
-	var remainder := base_url.trim_prefix(protocol + "://")
+	var remainder := _api_origin.trim_prefix(protocol + "://")
 	var slash_index := remainder.find("/")
 	var host_port := remainder
 	var base_path := ""
@@ -628,7 +613,7 @@ func _parse_base_url() -> Dictionary:
 		port = int(host_port.substr(colon_index + 1))
 
 	if host.is_empty():
-		return _error_result(ERROR_INVALID_REQUEST, "PersistlyClient base_url must include a host.")
+		return _error_result(ERROR_INVALID_REQUEST, "PersistlyClient API origin must include a host.")
 
 	return {
 		"host": host,

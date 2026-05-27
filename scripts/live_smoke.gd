@@ -12,15 +12,10 @@ func _init() -> void:
 		_finish()
 		return
 
-	var base_url := OS.get_environment("PERSISTLY_API_BASE").strip_edges()
-	if base_url.is_empty():
-		base_url = "https://api.persistly.app"
-
 	var smoke_id := "godot-live-smoke-" + str(Time.get_unix_time_from_system()).replace(".", "-")
 	var persistly := PersistlyGameSaves.new()
 	var configured: Dictionary = persistly.configure({
 		"runtime_key": runtime_key,
-		"base_url": base_url,
 		"playerRef": smoke_id,
 		"localProfileKey": smoke_id,
 		"storage_path": "user://persistly-live-smoke",

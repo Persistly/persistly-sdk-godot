@@ -242,12 +242,6 @@ Run this only with a dev/test runtime key. It creates a temporary profile and `a
 PERSISTLY_RUNTIME_KEY=ps_test_replace_me scripts/live_smoke.sh
 ```
 
-Optional:
-
-```bash
-PERSISTLY_API_BASE=https://stage-api.persistly.app PERSISTLY_RUNTIME_KEY=ps_test_replace_me scripts/live_smoke.sh
-```
-
 ## Example Project
 
 `examples/last_beacon/` is a small endless idle demo. New integrations should follow the facade-first `PersistlyGameSaves` quickstart above; the raw client remains documented as an advanced reference.
@@ -257,4 +251,4 @@ PERSISTLY_API_BASE=https://stage-api.persistly.app PERSISTLY_RUNTIME_KEY=ps_test
 - validate the pinned contract bundle
 - run the client validation scripts
 - launch `Last Beacon` and verify create, load, sync, and conflict handling against a real runtime key
-- keep example defaults aligned with `https://api.persistly.app`
+- keep example traffic on the SDK-owned Persistly API origin

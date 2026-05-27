@@ -758,7 +758,6 @@ func _check_duplicate_remote_slot_is_reconciled(game_saves_script: Script) -> vo
 func _check_first_dirty_slot_sync_creates_profile_with_character(game_saves_script: Script) -> void:
 	var persistly: Object = game_saves_script.new()
 	persistly.configure({
-		"baseUrl": "http://127.0.0.1:9",
 		"runtime_key": "ps_test_replace_me",
 		"playerRef": "player-184",
 		"localProfileKey": "validation-atomic-first-slot",

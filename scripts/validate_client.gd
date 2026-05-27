@@ -1,7 +1,6 @@
 extends SceneTree
 
 const CLIENT_SCRIPT := "res://addons/persistly/persistly_client.gd"
-const BASE_URL := "http://127.0.0.1:18080"
 const RUNTIME_KEY := "ps_test_local"
 
 const CREATE_PAYLOAD := {
@@ -316,7 +315,7 @@ func _initialize() -> void:
 		_finish()
 		return
 
-	var client: Object = client_script.new(BASE_URL, RUNTIME_KEY)
+	var client: Object = client_script.new(RUNTIME_KEY)
 	_seed_fixture_responses(client)
 
 	_check_versions(client_script)

@@ -22,7 +22,6 @@ var _is_busy: bool = false
 
 var _tick_timer: Timer
 
-var _base_url_input: LineEdit
 var _runtime_key_input: LineEdit
 var _player_ref_input: LineEdit
 var _character_name_input: LineEdit
@@ -87,8 +86,8 @@ func _on_resume_pressed() -> void:
 
 	_last_error = ""
 	var config := _current_config()
-	if String(config.get("baseUrl", "")).is_empty() or String(config.get("runtimeKey", "")).is_empty():
-		_last_error = "Base URL and runtime key are required before connecting to Persistly."
+	if String(config.get("runtimeKey", "")).is_empty():
+		_last_error = "Runtime key is required before connecting to Persistly."
 		_refresh_ui()
 		return
 
@@ -115,8 +114,8 @@ func _sync_now() -> void:
 		return
 
 	var config := _current_config()
-	if String(config.get("baseUrl", "")).is_empty() or String(config.get("runtimeKey", "")).is_empty():
-		_last_error = "Base URL and runtime key are required before syncing."
+	if String(config.get("runtimeKey", "")).is_empty():
+		_last_error = "Runtime key is required before syncing."
 		_refresh_ui()
 		return
 
@@ -215,7 +214,6 @@ func _build_ui() -> void:
 	config_panel.add_child(config_box)
 	config_box.add_child(_panel_title("Persistly Runtime"))
 
-	_base_url_input = _labeled_input(config_box, "API Base URL", false)
 	_runtime_key_input = _labeled_input(config_box, "Runtime Key", true)
 	_player_ref_input = _labeled_input(config_box, "Player reference", false)
 	_character_name_input = _labeled_input(config_box, "Character Name", false)
@@ -330,7 +328,6 @@ func _create_timers() -> void:
 
 func _apply_profile_to_inputs() -> void:
 	var config: Dictionary = _profile.get("config", {})
-	_base_url_input.text = String(config.get("baseUrl", "https://api.persistly.app"))
 	_runtime_key_input.text = String(config.get("runtimeKey", ""))
 	_player_ref_input.text = String(config.get("playerRef", ""))
 	_character_name_input.text = String(config.get("characterName", "Ayla"))
@@ -351,7 +348,6 @@ func _restore_profile_state() -> void:
 
 func _current_config() -> Dictionary:
 	return {
-		"baseUrl": _base_url_input.text.strip_edges(),
 		"runtimeKey": _runtime_key_input.text.strip_edges(),
 		"playerRef": _player_ref_input.text.strip_edges(),
 		"characterName": _character_name_input.text.strip_edges(),
@@ -372,7 +368,6 @@ func _current_metadata() -> Dictionary:
 func _build_game_saves(config: Dictionary):
 	var persistly = GAME_SAVES_SCRIPT.new()
 	persistly.configure({
-		"baseUrl": String(config.get("baseUrl", "")),
 		"runtimeKey": String(config.get("runtimeKey", "")),
 		"playerRef": _nullable_string(String(config.get("playerRef", ""))),
 		"localProfileKey": String(config.get("localProfileKey", "")),

@@ -48,7 +48,7 @@ addons/persistly/
 contracts/
 ```
 
-The account-first contract bundle `persistly-contract-v0.4.0` is still pending from the platform contract export. Until it lands, the validator reports the dependency and checks the pinned fallback bundle.
+The account-first contract bundle `persistly-contract-v0.4.0` is included under `contracts/` for release validation.
 
 ## Docs
 

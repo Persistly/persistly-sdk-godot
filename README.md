@@ -11,7 +11,7 @@ addons/persistly/
 contracts/
 ```
 
-The account-first `persistly-contract-v0.4.0` bundle is not present in this checkout yet. Until that platform export lands, the contract validator falls back to the pinned `persistly-contract-v0.3.0` bundle and prints that dependency.
+The account-first `persistly-contract-v0.4.0` bundle is included under `contracts/` for release validation.
 
 ## Quickstart
 

@@ -1,6 +1,6 @@
 # Persistly Godot Addon
 
-Persistly is a lightweight cloud-save backend for games. This addon provides the Godot runtime SDK for named save slots, profile account data, local-first persistence, profile sessions, safe sync timing, and explicit conflict handling.
+Persistly is a lightweight cloud-save backend for games. This addon provides the account-first Godot runtime SDK for local-first slot data, account data, account sessions, safe sync timing, and explicit conflict handling.
 
 ## Start Here
 
@@ -11,30 +11,33 @@ var persistly := PersistlyGameSaves.new()
 persistly.configure({
   "runtime_key": "ps_test_replace_me",
   "playerRef": "player-184",
-  "localProfileKey": "player-184",
+  "localAccountKey": "player-184",
 })
 
 persistly.save_data({
   "level": 5,
   "coins": 1200,
+}, {
+  "slotInfo": {
+    "characterName": "Ayla",
+    "level": 5,
+  },
 })
 
 var loaded := persistly.load_data()
 var synced := persistly.force_sync_data({"bypassCooldown": true})
-
-# After restoring an existing profile session on another device:
-var refreshed := persistly.refresh_data()
+var session := persistly.get_account_session({"includeToken": true})
 ```
 
-`save_data` writes locally first to the default `autosave` slot and guarantees a local profile envelope exists. The first remote sync creates the Persistly profile and matching character slot if needed. Use `save_slot`, `load_slot`, and `force_sync` when your game needs multiple named slots.
+`save_data` writes locally first to the default `autosave` slot. The first remote sync creates the Persistly account and matching slot if needed. Use `save_slot`, `load_slot`, and `force_sync` when your game needs multiple named slots.
 
-Use `clear_local_profile()` to wipe the local profile session plus all local slots for the current namespace before switching players on the same device.
+Use `clear_local_account()` to wipe the local account session plus all local slots for the current namespace before switching players on the same device.
 
-For explicit profile-first flows, use `create_profile()` to create one facade-managed Persistly profile, or `attach_profile(profileSaveId, profileSessionToken)` to load an already existing Persistly profile into empty local state.
+Use `create_account()` for explicit account-first flows, or `attach_account(accountId, accountSessionToken)` to load an existing Persistly account into empty local state.
 
-Use `inspect_profile()` and `get_account_data()` for account-wide state such as bundles, shared inventory, settings, or display currency balances. `patch_account_data()` shallow-merges top-level keys and deletes a top-level key when its patch value is `null`.
+Use `get_account_data()` for account-wide state. `patch_account_data()` shallow-merges top-level keys and deletes a top-level key when its patch value is `null`.
 
-Use `delete_slot(slotKey)` for JS-style delete parity: unsynced slots clear locally, synced slots delete the remote profile character and remove local state. Use `delete_profile()` to clear local-only state or remotely delete the synced profile and then wipe local session plus slots.
+Use `delete_slot(slotId)` for slot erasure. Use `delete_account()` to clear local-only state or remotely delete the synced account and then wipe local session plus slots.
 
 ## Install
 
@@ -45,7 +48,7 @@ addons/persistly/
 contracts/
 ```
 
-The contract bundle is required because the SDK validates against `res://contracts/persistly-contract-v0.3.0`.
+The account-first contract bundle `persistly-contract-v0.4.0` is still pending from the platform contract export. Until it lands, the validator reports the dependency and checks the pinned fallback bundle.
 
 ## Docs
 

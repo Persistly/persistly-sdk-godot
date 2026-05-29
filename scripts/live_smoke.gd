@@ -17,7 +17,7 @@ func _init() -> void:
 	var configured: Dictionary = persistly.configure({
 		"runtime_key": runtime_key,
 		"playerRef": smoke_id,
-		"localProfileKey": smoke_id,
+		"localAccountKey": smoke_id,
 		"storage_path": "user://persistly-live-smoke",
 		"syncPolicy": {
 			"minRemoteSyncIntervalSeconds": 1,
@@ -41,24 +41,28 @@ func _init() -> void:
 		"coins": 1200,
 		"checkpoint": "godot-live-smoke",
 	}, {
-		"characterName": "Smoke",
+		"slotInfo": {
+			"characterName": "Smoke",
+		},
 	})
 	_expect_status(saved, "local_saved", "save_slot")
 
 	var loaded: Dictionary = persistly.load_slot("autosave")
 	_expect_status(loaded, "local_found", "load_slot")
-	_expect_equal(loaded.get("state", {}).get("level", 0), 5, "load_slot state.level")
+	_expect_equal(loaded.get("data", {}).get("level", 0), 5, "load_slot data.level")
 
 	var first_sync: Dictionary = persistly.force_sync("autosave", {"bypassCooldown": true})
 	_expect_status(first_sync, "synced", "force_sync initial slot")
-	_expect_present(first_sync.get("characterSaveId", ""), "force_sync characterSaveId")
+	_expect_present(first_sync.get("slotId", ""), "force_sync slotId")
 
 	var updated: Dictionary = persistly.save_slot("autosave", {
 		"level": 6,
 		"coins": 1300,
 		"checkpoint": "godot-live-smoke-updated",
 	}, {
-		"characterName": "Smoke",
+		"slotInfo": {
+			"characterName": "Smoke",
+		},
 	})
 	_expect_status(updated, "local_saved", "save_slot updated")
 
@@ -68,22 +72,22 @@ func _init() -> void:
 	})
 	var synced_slot := false
 	for result in due_results:
-		if typeof(result) == TYPE_DICTIONARY and result.get("slotKey", "") == "autosave" and result.get("status", "") == "synced":
+		if typeof(result) == TYPE_DICTIONARY and result.get("slotId", "") == "autosave" and result.get("status", "") == "synced":
 			synced_slot = true
 	if not synced_slot:
 		_fail("sync_due_slots should sync dirty autosave slot.")
 
-	var patched_profile: Dictionary = persistly.patch_account_data({
+	var patched_account: Dictionary = persistly.patch_account_data({
 		"diamonds": 8,
 	})
-	_expect_status(patched_profile, "local_saved", "patch_account_data")
+	_expect_status(patched_account, "local_saved", "patch_account_data")
 
-	var profile_sync: Dictionary = persistly.force_sync_profile({"bypassCooldown": true})
-	_expect_status(profile_sync, "synced", "force_sync_profile")
+	var account_sync: Dictionary = persistly.force_sync_account({"bypassCooldown": true})
+	_expect_status(account_sync, "synced", "force_sync_account")
 
-	var session: Dictionary = persistly.get_profile_session({"includeToken": true})
-	_expect_present(session.get("profileSaveId", ""), "profileSaveId")
-	_expect_present(session.get("profileSessionToken", ""), "profileSessionToken")
+	var session: Dictionary = persistly.get_account_session({"includeToken": true})
+	_expect_present(session.get("accountId", ""), "accountId")
+	_expect_present(session.get("accountSessionToken", ""), "accountSessionToken")
 
 	_finish()
 

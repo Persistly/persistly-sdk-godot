@@ -9,7 +9,7 @@ It is an endless idle outpost demo with:
 - passive scrap generation every second
 - manual gather actions
 - worker and core upgrades
-- persisted local profile/config under `user://`
+- persisted local account/config under `user://`
 - facade-first Persistly slot saves through `PersistlyGameSaves`
 
 To run it:
@@ -30,5 +30,5 @@ What it proves:
 
 - local idle state can resume between launches
 - a Godot game can save and load local slot state first
-- the SDK can create a Persistly profile lazily and sync a named character slot
-- explicit `profileSaveId` plus `profileSessionToken` is the restore path; `playerRef` and `externalProfileRef` are references only, not lookup APIs
+- the SDK can create a Persistly account lazily and sync a named save slot
+- explicit `accountId` plus `accountSessionToken` is the restore path; `playerRef` and `externalAccountRef` are references only, not lookup APIs

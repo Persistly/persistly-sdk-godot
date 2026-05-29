@@ -2,342 +2,37 @@ extends SceneTree
 
 const GAME_SAVES_SCRIPT := "res://addons/persistly/persistly_game_saves.gd"
 
-const PROFILE_SAVE := {
-	"saveId": "sv_profile",
-	"playerRef": "player-184",
-	"metadata": {
-		"displayName": "Ayla",
-	},
-	"state": {
-		"schema": "persistly.profile.v1",
-		"accountData": {},
-		"characterSlots": [],
-	},
-	"version": 1,
-	"createdAt": "2026-04-09T10:00:00Z",
-	"updatedAt": "2026-04-09T10:00:00Z",
+const SYNC_POLICY := {
+	"minRemoteSyncIntervalSeconds": 60,
+	"forceSyncCooldownSeconds": 10,
+	"syncOnAppBackground": true,
+	"syncOnAppForeground": true,
+	"syncOnReconnect": true,
+	"maxQueuedLocalSnapshots": 25,
 }
 
-const CHARACTER_SAVE := {
-	"saveId": "sv_char",
-	"playerRef": "player-184",
-	"metadata": {
-		"_persistly": {
-			"slotKey": "autosave",
-		},
-		"scene": "cloud",
+const ACCOUNT := {
+	"accountId": "acc_test",
+	"accountData": {
+		"diamonds": 20,
 	},
-	"state": {
+	"slots": [],
+	"version": 1,
+	"updatedAt": "2026-05-29T10:00:00Z",
+}
+
+const SLOT := {
+	"slotId": "autosave",
+	"slotInfo": {
+		"characterName": "Ayla",
+		"level": 5,
+	},
+	"data": {
 		"level": 5,
 		"coins": 1200,
 	},
-	"version": 2,
-	"createdAt": "2026-04-09T10:01:00Z",
-	"updatedAt": "2026-04-09T10:02:00Z",
-}
-
-const REPLACEMENT_CHARACTER_SAVE := {
-	"saveId": "sv_char_replacement",
-	"playerRef": "player-184",
-	"metadata": {
-		"_persistly": {
-			"slotKey": "autosave",
-		},
-		"scene": "replacement",
-	},
-	"state": {
-		"level": 1,
-		"coins": 50,
-	},
 	"version": 1,
-	"createdAt": "2026-04-09T10:06:00Z",
-	"updatedAt": "2026-04-09T10:06:00Z",
-}
-
-const PROFILE_WITH_CHARACTER_SAVE := {
-	"saveId": "sv_profile",
-	"playerRef": "player-184",
-	"metadata": {
-		"displayName": "Ayla",
-	},
-	"state": {
-		"schema": "persistly.profile.v1",
-		"accountData": {},
-		"characterSlots": [
-			{
-				"slotKey": "autosave",
-				"characterSaveId": "sv_char",
-				"metadata": {
-					"scene": "starter",
-				},
-			},
-		],
-	},
-	"version": 2,
-	"createdAt": "2026-04-09T10:00:00Z",
-	"updatedAt": "2026-04-09T10:01:00Z",
-}
-
-const PROFILE_CREATE_RESPONSE := {
-	"profileSaveId": "sv_profile",
-	"profileSessionToken": "pst_profile_session",
-	"profile": PROFILE_SAVE,
-	"syncPolicy": {
-		"minRemoteSyncIntervalSeconds": 60,
-		"forceSyncCooldownSeconds": 10,
-		"syncOnAppBackground": true,
-		"syncOnAppForeground": true,
-		"syncOnReconnect": true,
-		"maxQueuedLocalSnapshots": 25,
-	},
-}
-
-const CHARACTER_CREATE_RESPONSE := {
-	"profileSaveId": "sv_profile",
-	"profile": PROFILE_WITH_CHARACTER_SAVE,
-	"character": CHARACTER_SAVE,
-	"syncPolicy": {
-		"minRemoteSyncIntervalSeconds": 60,
-		"forceSyncCooldownSeconds": 10,
-		"syncOnAppBackground": true,
-		"syncOnAppForeground": true,
-		"syncOnReconnect": true,
-		"maxQueuedLocalSnapshots": 25,
-	},
-}
-
-const FIRST_PROFILE_CREATE_WITH_CHARACTER_RESPONSE := {
-	"profileSaveId": "sv_profile",
-	"profileSessionToken": "pst_profile_session",
-	"profile": PROFILE_WITH_CHARACTER_SAVE,
-	"character": CHARACTER_SAVE,
-	"syncPolicy": {
-		"minRemoteSyncIntervalSeconds": 60,
-		"forceSyncCooldownSeconds": 10,
-		"syncOnAppBackground": true,
-		"syncOnAppForeground": true,
-		"syncOnReconnect": true,
-		"maxQueuedLocalSnapshots": 25,
-	},
-}
-
-const SYNC_ACCEPTED_RESPONSE := {
-	"status": "accepted",
-	"save": {
-		"saveId": "sv_char",
-		"playerRef": "player-184",
-		"metadata": {
-			"_persistly": {
-				"slotKey": "autosave",
-			},
-			"scene": "starter",
-		},
-		"state": {
-			"level": 6,
-			"coins": 1400,
-		},
-		"version": 3,
-		"createdAt": "2026-04-09T10:01:00Z",
-		"updatedAt": "2026-04-09T10:03:00Z",
-	},
-}
-
-const SYNC_CONFLICT_RESPONSE := {
-	"status": "conflict",
-	"save": {
-		"saveId": "sv_char",
-		"playerRef": "player-184",
-		"metadata": {
-			"_persistly": {
-				"slotKey": "autosave",
-			},
-			"scene": "cloud",
-		},
-		"state": {
-			"level": 8,
-			"coins": 3000,
-		},
-		"version": 4,
-		"createdAt": "2026-04-09T10:01:00Z",
-		"updatedAt": "2026-04-09T10:04:00Z",
-	},
-	"details": {
-		"reason": "base_version_mismatch",
-	},
-}
-
-const ACCOUNT_SYNC_RESPONSE := {
-	"status": "accepted",
-	"save": {
-		"saveId": "sv_profile",
-		"playerRef": "player-184",
-		"metadata": {
-			"displayName": "Ayla",
-		},
-		"state": {
-			"schema": "persistly.profile.v1",
-			"accountData": {
-				"diamonds": 25,
-			},
-			"characterSlots": [
-				{
-					"slotKey": "autosave",
-					"characterSaveId": "sv_char",
-					"metadata": {
-						"scene": "starter",
-					},
-				},
-			],
-		},
-		"version": 3,
-		"createdAt": "2026-04-09T10:00:00Z",
-		"updatedAt": "2026-04-09T10:03:00Z",
-	},
-}
-
-const ACCOUNT_SYNC_CONFLICT_RESPONSE := {
-	"status": "conflict",
-	"save": {
-		"saveId": "sv_profile",
-		"playerRef": "player-184",
-		"metadata": {
-			"displayName": "Cloud",
-		},
-		"state": {
-			"schema": "persistly.profile.v1",
-			"accountData": {
-				"diamonds": 40,
-				"region": "eu",
-			},
-			"characterSlots": [
-				{
-					"slotKey": "autosave",
-					"characterSaveId": "sv_char",
-					"metadata": {
-						"scene": "starter",
-					},
-				},
-			],
-		},
-		"version": 5,
-		"createdAt": "2026-04-09T10:00:00Z",
-		"updatedAt": "2026-04-09T10:06:00Z",
-	},
-	"details": {
-		"reason": "base_version_mismatch",
-	},
-}
-
-const ARCHIVE_RESPONSE := {
-	"profileSaveId": "sv_profile",
-	"profile": {
-		"saveId": "sv_profile",
-		"playerRef": "player-184",
-		"metadata": {
-			"displayName": "Ayla",
-		},
-		"state": {
-			"schema": "persistly.profile.v1",
-			"accountData": {
-				"diamonds": 25,
-			},
-			"characterSlots": [
-				{
-					"slotKey": "autosave",
-					"characterSaveId": "sv_char",
-					"metadata": {
-						"scene": "starter",
-					},
-					"archived": true,
-					"archivedAt": "2026-04-09T10:05:00Z",
-				},
-			],
-		},
-		"version": 4,
-		"createdAt": "2026-04-09T10:00:00Z",
-		"updatedAt": "2026-04-09T10:05:00Z",
-	},
-}
-
-const DELETE_CHARACTER_PROFILE_RESPONSE := {
-	"saveId": "sv_profile",
-	"playerRef": "player-184",
-	"metadata": {
-		"displayName": "Ayla",
-	},
-	"state": {
-		"schema": "persistly.profile.v1",
-		"accountData": {},
-		"characterSlots": [],
-	},
-	"version": 5,
-	"createdAt": "2026-04-09T10:00:00Z",
-	"updatedAt": "2026-04-09T10:05:00Z",
-}
-
-const DELETE_CHARACTER_RESPONSE := {
-	"profileSaveId": "sv_profile",
-	"characterSaveId": "sv_char",
-	"slotKey": "autosave",
-	"deletedAt": "2026-04-09T10:05:00Z",
-	"alreadyDeleted": false,
-	"cleanupQueued": true,
-	"profile": DELETE_CHARACTER_PROFILE_RESPONSE,
-}
-
-const DELETE_PROFILE_RESPONSE := {
-	"profileSaveId": "sv_profile",
-	"deletedAt": "2026-04-09T10:10:00Z",
-	"deletedCharacterCount": 1,
-	"alreadyDeleted": false,
-	"cleanupQueued": true,
-}
-
-const REPLACEMENT_CHARACTER_CREATE_RESPONSE := {
-	"profileSaveId": "sv_profile",
-	"profile": {
-		"saveId": "sv_profile",
-		"playerRef": "player-184",
-		"metadata": {
-			"displayName": "Ayla",
-		},
-		"state": {
-			"schema": "persistly.profile.v1",
-			"accountData": {
-				"diamonds": 25,
-			},
-			"characterSlots": [
-				{
-					"slotKey": "autosave",
-					"characterSaveId": "sv_char",
-					"metadata": {
-						"scene": "starter",
-					},
-					"archived": true,
-					"archivedAt": "2026-04-09T10:05:00Z",
-				},
-				{
-					"slotKey": "autosave",
-					"characterSaveId": "sv_char_replacement",
-					"metadata": {
-						"scene": "replacement",
-					},
-				},
-			],
-		},
-		"version": 5,
-		"createdAt": "2026-04-09T10:00:00Z",
-		"updatedAt": "2026-04-09T10:06:00Z",
-	},
-	"character": REPLACEMENT_CHARACTER_SAVE,
-	"syncPolicy": {
-		"minRemoteSyncIntervalSeconds": 60,
-		"forceSyncCooldownSeconds": 10,
-		"syncOnAppBackground": true,
-		"syncOnAppForeground": true,
-		"syncOnReconnect": true,
-		"maxQueuedLocalSnapshots": 25,
-	},
+	"updatedAt": "2026-05-29T10:01:00Z",
 }
 
 var _failure_count := 0
@@ -352,799 +47,241 @@ func _initialize() -> void:
 		return
 
 	_check_status_and_target_constants(game_saves_script)
-	_check_not_configured(game_saves_script)
-	_check_configured_local_slot_flow(game_saves_script)
-	_check_default_data_aliases(game_saves_script)
-	_check_profile_session_and_account_data(game_saves_script)
-	_check_facade_create_and_attach_profile(game_saves_script)
-	_check_existing_profile_session_loads_remote_profile(game_saves_script)
-	_check_refresh_slot_pull_and_dirty_conflict(game_saves_script)
-	_check_profile_only_ensure_and_remote_slot_sync(game_saves_script)
-	_check_duplicate_remote_slot_is_reconciled(game_saves_script)
-	_check_first_dirty_slot_sync_creates_profile_with_character(game_saves_script)
-	_check_sync_policy_and_cooldown(game_saves_script)
-	_check_profile_conflict_payload(game_saves_script)
-	_check_conflict_helpers(game_saves_script)
-	_check_archive_and_clear(game_saves_script)
-	_check_delete_profile_and_slot(game_saves_script)
-	_check_clear_local_profile(game_saves_script)
-	_check_archived_slot_can_be_reused(game_saves_script)
-	_check_rejects_reserved_developer_metadata(game_saves_script)
-	_check_schema_versioned_file_persistence(game_saves_script)
+	_check_account_first_facade_surface(game_saves_script)
+	_check_local_slot_flow(game_saves_script)
+	_check_first_sync_creates_account_and_slot(game_saves_script)
+	_check_account_data_sync(game_saves_script)
+	_check_clear_and_delete_boundaries(game_saves_script)
+	_check_reserved_slot_info_rejected(game_saves_script)
 	_finish()
 
 
 func _check_status_and_target_constants(game_saves_script: Script) -> void:
 	_expect_equal(game_saves_script.DEFAULT_SLOT_KEY, "autosave", "PersistlyGameSaves.DEFAULT_SLOT_KEY")
-	var status = game_saves_script.PersistlyGameSaveStatus
-	_expect_equal(status.LOCAL_SAVED, "local_saved", "PersistlyGameSaveStatus.LOCAL_SAVED")
-	_expect_equal(status.LOCAL_FOUND, "local_found", "PersistlyGameSaveStatus.LOCAL_FOUND")
-	_expect_equal(status.NOT_FOUND, "not_found", "PersistlyGameSaveStatus.NOT_FOUND")
-	_expect_equal(status.NO_CHANGES, "no_changes", "PersistlyGameSaveStatus.NO_CHANGES")
-	_expect_equal(status.COOLDOWN, "cooldown", "PersistlyGameSaveStatus.COOLDOWN")
-	_expect_equal(status.SYNCED, "synced", "PersistlyGameSaveStatus.SYNCED")
-	_expect_equal(status.CONFLICT, "conflict", "PersistlyGameSaveStatus.CONFLICT")
-	_expect_equal(status.OFFLINE, "offline", "PersistlyGameSaveStatus.OFFLINE")
-	_expect_equal(status.RATE_LIMITED, "rate_limited", "PersistlyGameSaveStatus.RATE_LIMITED")
-
 	var target = game_saves_script.PersistlyGameSaveTarget
-	_expect_equal(target.PROFILE, "profile", "PersistlyGameSaveTarget.PROFILE")
+	_expect_equal(target.ACCOUNT, "account", "PersistlyGameSaveTarget.ACCOUNT")
 	_expect_equal(target.SLOT, "slot", "PersistlyGameSaveTarget.SLOT")
 
 
-func _check_not_configured(game_saves_script: Script) -> void:
+func _check_account_first_facade_surface(game_saves_script: Script) -> void:
 	var persistly: Object = game_saves_script.new()
-	var result: Dictionary = persistly.save_slot("autosave", {
-		"level": 1,
-	})
-	if result.get("status", "") != "not_configured":
-		_fail("save_slot before configure should return status not_configured.")
-	if typeof(result.get("error", {})) != TYPE_DICTIONARY:
-		_fail("save_slot before configure should include a clear error envelope.")
-	elif result["error"].get("code", "") != "not_configured":
-		_fail("save_slot before configure error code should be not_configured.")
+	for method_name in [
+		"create_account",
+		"attach_account",
+		"get_account_session",
+		"force_sync_account",
+		"sync_due_account",
+		"clear_local_account",
+		"delete_account",
+		"save_slot",
+		"load_slot",
+		"list_slot_data",
+		"slot_info",
+	]:
+		if not persistly.has_method(method_name):
+			_fail("PersistlyGameSaves should expose account-first method " + method_name + ".")
+	for legacy_method_name in [
+		"create_profile",
+		"attach_profile",
+		"get_profile_session",
+		"force_sync_profile",
+		"sync_due_profile",
+		"clear_local_profile",
+		"delete_profile",
+		"list_slots",
+		"inspect_profile",
+	]:
+		if persistly.has_method(legacy_method_name):
+			_fail("PersistlyGameSaves should not expose release profile compatibility method " + legacy_method_name + ".")
 
 
-func _check_configured_local_slot_flow(game_saves_script: Script) -> void:
+func _check_local_slot_flow(game_saves_script: Script) -> void:
 	var persistly: Object = game_saves_script.new()
-	var configure_result: Dictionary = persistly.configure({
+	var configured: Dictionary = persistly.configure({
 		"runtime_key": "ps_test_replace_me",
-		"sync_interval_seconds": 40,
 		"playerRef": "player-184",
-		"externalProfileRef": {
+		"externalAccountRef": {
 			"provider": "auth0",
 			"subject": "auth0|user_123",
 		},
-		"localProfileKey": "validation-local-flow",
+		"localAccountKey": "validation-local-flow",
 		"storage_path": _storage_path("local_flow"),
 	})
-	if configure_result.get("status", "") != "configured":
-		_fail("configure with runtime_key should return configured status.")
-	if configure_result.get("localProfileKey", "") != "validation-local-flow":
-		_fail("configure should expose the resolved local profile key.")
+	_expect_equal(configured.get("status", ""), "configured", "configure status")
+	_expect_equal(configured.get("localAccountKey", ""), "validation-local-flow", "configure localAccountKey")
 
-	var save_result: Dictionary = persistly.save_slot("autosave", {
+	var saved: Dictionary = persistly.save_slot("autosave", {
 		"level": 5,
 		"coins": 1200,
 	}, {
-		"scene": "starter",
+		"slotInfo": {
+			"characterName": "Ayla",
+			"level": 5,
+		},
 	})
-	if save_result.get("status", "") != "local_saved":
-		_fail("save_slot should return local_saved status.")
-	if save_result.get("slotKey", "") != "autosave":
-		_fail("save_slot should echo the slot key.")
-	if bool(save_result.get("dirty", false)) != true:
-		_fail("save_slot should mark the local slot dirty.")
-	_expect_dictionary(save_result.get("state", {}), {
-		"level": 5,
-		"coins": 1200,
-	}, "save_slot state")
+	_expect_equal(saved.get("status", ""), "local_saved", "save_slot status")
+	_expect_equal(saved.get("slotId", ""), "autosave", "save_slot slotId")
+	_expect_dictionary(saved.get("data", {}), SLOT["data"], "save_slot data")
+	_expect_dictionary(saved.get("slotInfo", {}), SLOT["slotInfo"], "save_slot slotInfo")
 
 	var loaded: Dictionary = persistly.load_slot("autosave")
-	if loaded.get("status", "") != "local_found":
-		_fail("load_slot should report local_found for locally stored slots.")
-	_expect_dictionary(loaded.get("state", {}), {
-		"level": 5,
-		"coins": 1200,
-	}, "load_slot state")
-	_expect_dictionary(loaded.get("metadata", {}), {
-		"scene": "starter",
-	}, "load_slot metadata")
+	_expect_equal(loaded.get("status", ""), "local_found", "load_slot status")
+	_expect_dictionary(loaded.get("data", {}), SLOT["data"], "load_slot data")
 
-	var listed: Array = persistly.list_slots()
-	if listed.size() != 1 or listed[0].get("slotKey", "") != "autosave":
-		_fail("list_slots should return active local slots.")
+	var listed: Array = persistly.list_slot_data()
+	if listed.size() != 1 or listed[0].get("slotId", "") != "autosave":
+		_fail("list_slot_data should return active local slots.")
 
-	var inspected: Dictionary = persistly.inspect_slot("autosave")
-	if inspected.get("status", "") != "local_found" or not inspected.has("updatedAtUnix"):
-		_fail("inspect_slot should expose local slot metadata without a network request.")
+	var info: Dictionary = persistly.slot_info("autosave")
+	_expect_dictionary(info.get("slotInfo", {}), SLOT["slotInfo"], "slot_info slotInfo")
 
 
-func _check_default_data_aliases(game_saves_script: Script) -> void:
+func _check_first_sync_creates_account_and_slot(game_saves_script: Script) -> void:
 	var persistly: Object = game_saves_script.new()
 	persistly.configure({
 		"runtime_key": "ps_test_replace_me",
 		"playerRef": "player-184",
-		"localProfileKey": "validation-data-aliases",
-		"storage_path": _storage_path("data_aliases"),
+		"localAccountKey": "validation-first-sync",
+		"storage_path": _storage_path("first_sync"),
 	})
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles", 201, FIRST_PROFILE_CREATE_WITH_CHARACTER_RESPONSE)
-
-	var saved: Dictionary = persistly.save_data({
-		"level": 5,
-		"coins": 1200,
-	}, {
-		"scene": "starter",
+	persistly._client.register_fixture_response("POST", "/api/v1/accounts", 201, {
+		"accountId": "acc_test",
+		"accountSessionToken": "pst_account_session",
+		"account": _account_with_slot("autosave"),
+		"slot": SLOT,
+		"syncPolicy": SYNC_POLICY,
 	})
-	_expect_equal(saved.get("status", ""), "local_saved", "save_data status")
-	_expect_equal(saved.get("slotKey", ""), "autosave", "save_data default slot")
-	_expect_dictionary(persistly.load_data().get("state", {}), {
-		"level": 5,
-		"coins": 1200,
-	}, "load_data state")
-	_expect_equal(persistly.inspect_data().get("slotKey", ""), "autosave", "inspect_data default slot")
 
+	persistly.save_data(SLOT["data"], {
+		"slotInfo": SLOT["slotInfo"],
+	})
 	var synced: Dictionary = persistly.force_sync_data({
 		"bypassCooldown": true,
 	})
 	_expect_equal(synced.get("status", ""), "synced", "force_sync_data status")
-	_expect_equal(synced.get("slotKey", ""), "autosave", "force_sync_data default slot")
+	_expect_equal(synced.get("slotId", ""), "autosave", "force_sync_data slotId")
+	_expect_equal(persistly.get_account_session({"includeToken": true}).get("accountId", ""), "acc_test", "get_account_session accountId")
+	_expect_equal(persistly.get_account_session({"includeToken": true}).get("accountSessionToken", ""), "pst_account_session", "get_account_session token")
 
-	persistly.save_data({
-		"level": 9,
-	}, {
-		"scene": "local",
-	})
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/sync", 409, SYNC_CONFLICT_RESPONSE)
-	var conflict: Dictionary = persistly.force_sync_data({
-		"bypassCooldown": true,
-	})
-	_expect_equal(conflict.get("status", ""), "conflict", "force_sync_data conflict status")
-	var kept: Dictionary = persistly.keep_local_data_for_later()
-	_expect_equal(kept.get("dirty", false), true, "keep_local_data_for_later keeps autosave dirty")
-	var accepted: Dictionary = persistly.accept_cloud_data()
-	_expect_equal(accepted.get("status", ""), "synced", "accept_cloud_data status")
-	persistly.save_data({
-		"level": 10,
-	})
-	persistly._slots["autosave"]["cloudVersion"] = 4
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/sync", 200, SYNC_ACCEPTED_RESPONSE)
-	var overwritten: Dictionary = persistly.overwrite_cloud_data({
-		"bypassCooldown": true,
-	})
-	_expect_equal(overwritten.get("status", ""), "synced", "overwrite_cloud_data status")
+	var request: Dictionary = persistly._client.get_recorded_requests()[0]
+	_expect_equal(request.get("path", ""), "/api/v1/accounts", "first sync route")
+	if str(request.get("body", {})).find("_persistly") >= 0:
+		_fail("Facade account create request should not expose _persistly metadata.")
 
 
-func _check_profile_session_and_account_data(game_saves_script: Script) -> void:
+func _check_account_data_sync(game_saves_script: Script) -> void:
 	var persistly: Object = game_saves_script.new()
 	persistly.configure({
 		"runtime_key": "ps_test_replace_me",
-		"localProfileKey": "validation-account",
-		"profileSaveId": "sv_profile",
-		"profileSessionToken": "pst_profile_session",
-		"storage_path": _storage_path("account"),
+		"accountId": "acc_test",
+		"accountSessionToken": "pst_account_session",
+		"localAccountKey": "validation-account-sync",
+		"storage_path": _storage_path("account_sync"),
 	})
-	persistly._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile", 200, PROFILE_CREATE_RESPONSE)
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/account-data/sync", 200, ACCOUNT_SYNC_RESPONSE)
-
-	var session_without_token: Dictionary = persistly.get_profile_session()
-	if session_without_token.has("profileSessionToken"):
-		_fail("get_profile_session should not return profileSessionToken unless explicitly requested.")
-	var session_with_token: Dictionary = persistly.get_profile_session({
-		"includeToken": true,
+	persistly.account_version = 1
+	persistly._client.register_fixture_response("POST", "/api/v1/accounts/acc_test/data/sync", 200, {
+		"status": "accepted",
+		"version": 2,
+		"updatedAt": "2026-05-29T10:04:00Z",
+		"historyRetained": true,
 	})
-	_expect_equal(session_with_token.get("profileSessionToken", ""), "pst_profile_session", "get_profile_session includeToken")
 
-	var saved: Dictionary = persistly.save_account_data({
+	persistly.save_account_data({
 		"diamonds": 20,
 	})
-	_expect_equal(saved.get("status", ""), "local_saved", "save_account_data status")
-	var patched: Dictionary = persistly.patch_account_data({
-		"diamonds": 25,
+	persistly.patch_account_data({
+		"diamonds": 30,
 		"obsolete": null,
 	})
-	_expect_equal(patched.get("accountData", {}).get("diamonds", 0), 25, "patch_account_data shallow patch")
-	_expect_equal(persistly.get_account_data().get("diamonds", 0), 25, "get_account_data local read")
-	_expect_equal(persistly.inspect_profile().get("accountData", {}).get("diamonds", 0), 25, "inspect_profile account data")
-	if patched.get("accountData", {}).has("obsolete"):
-		_fail("patch_account_data should delete keys patched to null.")
-
-	var synced: Dictionary = persistly.force_sync_profile({
+	_expect_equal(persistly.get_account_data().get("diamonds", 0), 30, "patch_account_data")
+	var synced: Dictionary = persistly.force_sync_account({
 		"bypassCooldown": true,
 	})
-	_expect_equal(synced.get("status", ""), "synced", "force_sync_profile status")
-	_expect_equal(synced.get("target", ""), "profile", "force_sync_profile target")
+	_expect_equal(synced.get("status", ""), "synced", "force_sync_account status")
+	_expect_equal(synced.get("target", ""), "account", "force_sync_account target")
+
+	var request: Dictionary = persistly._client.get_recorded_requests()[0]
+	_expect_equal(request.get("path", ""), "/api/v1/accounts/acc_test/data/sync", "account sync route")
+	_expect_has_account_session_header(request)
 
 
-func _check_facade_create_and_attach_profile(game_saves_script: Script) -> void:
-	var created_facade: Object = game_saves_script.new()
-	created_facade.configure({
-		"runtime_key": "ps_test_replace_me",
-		"playerRef": "player-184",
-		"localProfileKey": "validation-create-profile",
-		"storage_path": _storage_path("create_profile"),
-	})
-	created_facade._client.register_fixture_response("GET", "/api/v1/runtime-config", 200, {
-		"syncPolicy": PROFILE_CREATE_RESPONSE["syncPolicy"],
-	})
-	created_facade._client.register_fixture_response("POST", "/api/v1/profiles", 201, PROFILE_CREATE_RESPONSE)
-	var created: Dictionary = created_facade.create_profile()
-	_expect_equal(created.get("status", ""), "synced", "facade create_profile status")
-	_expect_equal(created_facade.get_profile_session({"includeToken": true}).get("profileSaveId", ""), "sv_profile", "facade create_profile stores session locally")
-
-	created_facade.save_slot("autosave", {"level": 2})
-	var duplicate_create: Dictionary = created_facade.create_profile()
-	_expect_equal(duplicate_create.get("status", ""), "invalid_request", "facade create_profile should reject existing local state")
-
-	var attached_facade: Object = game_saves_script.new()
-	attached_facade.configure({
-		"runtime_key": "ps_test_replace_me",
-		"localProfileKey": "validation-attach-profile",
-		"storage_path": _storage_path("attach_profile"),
-	})
-	attached_facade._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile", 200, PROFILE_CREATE_RESPONSE)
-	var attached: Dictionary = attached_facade.attach_profile("sv_profile", "pst_profile_session")
-	_expect_equal(attached.get("status", ""), "synced", "attach_profile status")
-	_expect_equal(attached_facade.get_profile_session({"includeToken": true}).get("profileSaveId", ""), "sv_profile", "attach_profile stores profile locally")
-
-	attached_facade.save_slot("autosave", {"level": 4})
-	var rejected_attach: Dictionary = attached_facade.attach_profile("sv_other", "pst_other")
-	_expect_equal(rejected_attach.get("status", ""), "invalid_request", "attach_profile should reject dirty local state")
-
-
-func _check_existing_profile_session_loads_remote_profile(game_saves_script: Script) -> void:
-	var persistly: Object = game_saves_script.new()
-	persistly.configure({
-		"runtime_key": "ps_test_replace_me",
-		"localProfileKey": "validation-restore",
-		"profileSaveId": "sv_profile",
-		"profileSessionToken": "pst_profile_session",
-		"storage_path": _storage_path("restore"),
-	})
-	persistly._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile", 200, PROFILE_CREATE_RESPONSE)
-
-	var ensured: Dictionary = persistly.ensure_profile()
-	_expect_equal(ensured.get("status", ""), "synced", "restored ensure_profile status")
-	_expect_equal(ensured.get("version", 0), 1, "restored ensure_profile version")
-	_expect_dictionary(ensured.get("metadata", {}), PROFILE_SAVE["metadata"], "restored ensure_profile metadata")
-	if persistly._client.get_recorded_requests().is_empty():
-		_fail("ensure_profile with an existing profile session should load the remote profile.")
-
-
-func _check_refresh_slot_pull_and_dirty_conflict(game_saves_script: Script) -> void:
-	var clean_facade: Object = game_saves_script.new()
-	clean_facade.configure({
-		"runtime_key": "ps_test_replace_me",
-		"localProfileKey": "validation-refresh-clean",
-		"profileSaveId": "sv_profile",
-		"profileSessionToken": "pst_profile_session",
-		"storage_path": _storage_path("refresh_clean"),
-	})
-	clean_facade._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile", 200, {
-		"profileSaveId": "sv_profile",
-		"profile": PROFILE_WITH_CHARACTER_SAVE,
-		"syncPolicy": PROFILE_CREATE_RESPONSE["syncPolicy"],
-	})
-	clean_facade._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile/characters/sv_char", 200, {
-		"save": CHARACTER_SAVE,
-	})
-
-	var refreshed: Dictionary = clean_facade.refresh_slot("autosave")
-	_expect_equal(refreshed.get("status", ""), "synced", "refresh_slot clean status")
-	_expect_dictionary(refreshed.get("state", {}), CHARACTER_SAVE["state"], "refresh_slot clean state")
-	_expect_equal(refreshed.get("dirty", true), false, "refresh_slot clean dirty flag")
-
-	var dirty_facade: Object = game_saves_script.new()
-	dirty_facade.configure({
-		"runtime_key": "ps_test_replace_me",
-		"localProfileKey": "validation-refresh-dirty",
-		"profileSaveId": "sv_profile",
-		"profileSessionToken": "pst_profile_session",
-		"storage_path": _storage_path("refresh_dirty"),
-	})
-	dirty_facade._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile", 200, {
-		"profileSaveId": "sv_profile",
-		"profile": PROFILE_WITH_CHARACTER_SAVE,
-		"syncPolicy": PROFILE_CREATE_RESPONSE["syncPolicy"],
-	})
-	dirty_facade._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile/characters/sv_char", 200, {
-		"save": CHARACTER_SAVE,
-	})
-	dirty_facade.save_slot("autosave", {
-		"level": 2,
-		"coins": 20,
-	})
-
-	var conflict: Dictionary = dirty_facade.refresh_slot("autosave")
-	_expect_equal(conflict.get("status", ""), "conflict", "refresh_slot dirty conflict status")
-	_expect_dictionary(conflict.get("localState", {}), {
-		"level": 2,
-		"coins": 20,
-	}, "refresh_slot dirty local state")
-	_expect_dictionary(conflict.get("cloudState", {}), CHARACTER_SAVE["state"], "refresh_slot dirty cloud state")
-
-
-func _check_profile_only_ensure_and_remote_slot_sync(game_saves_script: Script) -> void:
-	var persistly: Object = game_saves_script.new()
-	persistly.configure({
-		"runtime_key": "ps_test_replace_me",
-		"playerRef": "player-184",
-		"localProfileKey": "validation-sync",
-		"storage_path": _storage_path("sync"),
-	})
-	persistly._client.register_fixture_response("GET", "/api/v1/runtime-config", 200, {
-		"syncPolicy": PROFILE_CREATE_RESPONSE["syncPolicy"],
-	})
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles", 201, PROFILE_CREATE_RESPONSE)
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters", 201, CHARACTER_CREATE_RESPONSE)
-
-	var ensured: Dictionary = persistly.ensure_profile()
-	_expect_equal(ensured.get("status", ""), "synced", "ensure_profile status")
-	if ensured.has("profileSessionToken"):
-		_fail("ensure_profile should not return profileSessionToken by default.")
-	_expect_equal(persistly.get_profile_session({"includeToken": true}).get("profileSessionToken", ""), "pst_profile_session", "ensure_profile stored token")
-
-	var save_result: Dictionary = persistly.save_slot("autosave", {
-		"level": 5,
-		"coins": 1200,
-	}, {
-		"scene": "starter",
-	})
-	_expect_equal(save_result.get("status", ""), "local_saved", "save_slot before remote create")
-
-	var synced: Dictionary = persistly.force_sync("autosave", {
-		"bypassCooldown": true,
-	})
-	_expect_equal(synced.get("status", ""), "synced", "force_sync first character create")
-	_expect_equal(synced.get("target", ""), "slot", "force_sync target")
-	_expect_equal(synced.get("characterSaveId", ""), "sv_char", "force_sync characterSaveId")
-	var inspected: Dictionary = persistly.inspect_slot("autosave")
-	_expect_equal(inspected.get("dirty", true), false, "force_sync clears dirty flag")
-	_expect_dictionary(inspected.get("cloudState", {}), CHARACTER_SAVE["state"], "force_sync stores cloud state separately")
-
-
-func _check_duplicate_remote_slot_is_reconciled(game_saves_script: Script) -> void:
-	var persistly: Object = game_saves_script.new()
-	persistly.configure({
-		"runtime_key": "ps_test_replace_me",
-		"profileSaveId": "sv_profile",
-		"profileSessionToken": "pst_profile_session",
-		"playerRef": "player-184",
-		"localProfileKey": "validation-duplicate-slot-recovery",
-		"storage_path": _storage_path("duplicate_slot_recovery"),
-		"syncPolicy": {
-			"minRemoteSyncIntervalSeconds": 60,
-			"forceSyncCooldownSeconds": 0,
-			"syncOnAppBackground": true,
-			"syncOnAppForeground": true,
-			"syncOnReconnect": true,
-			"maxQueuedLocalSnapshots": 25,
-		},
-	})
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters", 409, {
-		"error": {
-			"code": "slot_already_exists",
-			"message": "An active character already exists for this slot key.",
-		},
-	})
-	persistly._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile", 200, {
-		"profileSaveId": "sv_profile",
-		"profile": PROFILE_WITH_CHARACTER_SAVE,
-		"syncPolicy": PROFILE_CREATE_RESPONSE["syncPolicy"],
-	})
-	persistly._client.register_fixture_response("GET", "/api/v1/profiles/sv_profile/characters/sv_char", 200, {
-		"save": CHARACTER_SAVE,
-	})
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/sync", 200, SYNC_ACCEPTED_RESPONSE)
-	persistly.save_slot("autosave", {
-		"level": 6,
-		"coins": 1400,
-	}, {
-		"scene": "local",
-	})
-
-	var synced: Dictionary = persistly.force_sync("autosave", {
-		"bypassCooldown": true,
-	})
-	_expect_equal(synced.get("status", ""), "synced", "duplicate remote slot recovery sync status")
-	_expect_equal(synced.get("characterSaveId", ""), "sv_char", "duplicate remote slot recovery stores characterSaveId")
-	var requests: Array = persistly._client.get_recorded_requests()
-	if requests.size() != 4:
-		_fail("duplicate remote slot recovery should create, reload profile, load character, then sync.")
-	elif requests[3].get("path", "") != "/api/v1/profiles/sv_profile/characters/sv_char/sync":
-		_fail("duplicate remote slot recovery should retry using the reconciled character save id.")
-
-
-func _check_first_dirty_slot_sync_creates_profile_with_character(game_saves_script: Script) -> void:
-	var persistly: Object = game_saves_script.new()
-	persistly.configure({
-		"runtime_key": "ps_test_replace_me",
-		"playerRef": "player-184",
-		"localProfileKey": "validation-atomic-first-slot",
-		"storage_path": _storage_path("atomic_first_slot"),
-	})
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles", 201, FIRST_PROFILE_CREATE_WITH_CHARACTER_RESPONSE)
-	persistly.save_slot("autosave", {
-		"level": 5,
-		"coins": 1200,
-	}, {
-		"scene": "starter",
-	})
-
-	var synced: Dictionary = persistly.force_sync("autosave", {
-		"bypassCooldown": true,
-	})
-	_expect_equal(synced.get("status", ""), "synced", "first dirty slot sync creates profile with character in one request")
-	_expect_equal(synced.get("characterSaveId", ""), "sv_char", "first dirty slot sync stores returned characterSaveId")
-	_expect_equal(persistly.get_profile_session({"includeToken": true}).get("profileSessionToken", ""), "pst_profile_session", "first dirty slot sync stores profile token")
-	var requests: Array = persistly._client.get_recorded_requests()
-	if requests.size() != 1:
-		_fail("first dirty slot sync should make exactly one remote request.")
-	elif requests[0].get("method", "") != "POST" or requests[0].get("path", "") != "/api/v1/profiles":
-		_fail("first dirty slot sync should create the profile and first character with POST /api/v1/profiles.")
-	else:
-		var headers: Array = requests[0].get("headers", [])
-		if not headers.has("X-Persistly-SDK: godot"):
-			_fail("first dirty slot sync should send X-Persistly-SDK diagnostics header.")
-		if not headers.has("X-Persistly-SDK-Version: 1.0.0"):
-			_fail("first dirty slot sync should send X-Persistly-SDK-Version diagnostics header.")
-		if not headers.has("X-Persistly-Platform: godot"):
-			_fail("first dirty slot sync should send X-Persistly-Platform diagnostics header.")
-		var body = requests[0].get("body", {})
-		if typeof(body) != TYPE_DICTIONARY or typeof(body.get("character", null)) != TYPE_DICTIONARY:
-			_fail("first dirty slot sync create_profile request should include the first character payload.")
-
-
-func _check_sync_policy_and_cooldown(game_saves_script: Script) -> void:
-	var persistly: Object = game_saves_script.new()
-	persistly.configure({
-		"runtime_key": "ps_test_replace_me",
-		"profileSaveId": "sv_profile",
-		"profileSessionToken": "pst_profile_session",
-		"localProfileKey": "validation-policy",
-		"storage_path": _storage_path("policy"),
-		"syncPolicy": {
-			"minRemoteSyncIntervalSeconds": 60,
-			"forceSyncCooldownSeconds": 10,
-			"syncOnAppBackground": true,
-			"syncOnAppForeground": true,
-			"syncOnReconnect": true,
-			"maxQueuedLocalSnapshots": 25,
-		},
-	})
-	persistly.save_slot("autosave", {
-		"level": 6,
-	}, {
-		"scene": "starter",
-	})
-	persistly._slots["autosave"]["characterSaveId"] = "sv_char"
-	persistly._slots["autosave"]["version"] = 2
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/sync", 200, SYNC_ACCEPTED_RESPONSE)
-
-	var first: Dictionary = persistly.force_sync("autosave", {
-		"bypassCooldown": true,
-	})
-	_expect_equal(first.get("status", ""), "synced", "first force_sync status")
-	persistly.save_slot("autosave", {
-		"level": 7,
-	}, {
-		"scene": "starter",
-	})
-
-	var cooled: Dictionary = persistly.force_sync("autosave")
-	_expect_equal(cooled.get("status", ""), "cooldown", "force_sync should respect cooldown by default")
-
-	var skipped: Array = persistly.sync_due_slots({
-		"includeSkipped": true,
-	})
-	if skipped.is_empty() or skipped[0].get("status", "") != "cooldown":
-		_fail("sync_due_slots should report cooldown skips when includeSkipped is true.")
-
-
-func _check_profile_conflict_payload(game_saves_script: Script) -> void:
-	var persistly: Object = game_saves_script.new()
-	var events: Array = []
-	persistly.configure({
-		"runtime_key": "ps_test_replace_me",
-		"profileSaveId": "sv_profile",
-		"profileSessionToken": "pst_profile_session",
-		"localProfileKey": "validation-profile-conflict",
-		"storage_path": _storage_path("profile_conflict"),
-		"onSyncResult": func(result: Dictionary) -> void:
-			events.append(result),
-	})
-	persistly.profile_metadata = {
-		"displayName": "Local",
-	}
-	persistly.profile_version = 3
-	persistly.save_account_data({
-		"diamonds": 35,
-		"region": "us",
-	})
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/account-data/sync", 409, ACCOUNT_SYNC_CONFLICT_RESPONSE)
-
-	var conflict: Dictionary = persistly.force_sync_profile({
-		"bypassCooldown": true,
-	})
-	_expect_equal(conflict.get("status", ""), "conflict", "force_sync_profile conflict status")
-	_expect_equal(conflict.get("target", ""), "profile", "force_sync_profile conflict target")
-	_expect_dictionary(conflict.get("localAccountData", {}), {
-		"diamonds": 35,
-		"region": "us",
-	}, "force_sync_profile conflict local account data")
-	_expect_dictionary(conflict.get("cloudAccountData", {}), ACCOUNT_SYNC_CONFLICT_RESPONSE["save"]["state"]["accountData"], "force_sync_profile conflict cloud account data")
-	_expect_dictionary(conflict.get("localMetadata", {}), {
-		"displayName": "Local",
-	}, "force_sync_profile conflict local metadata")
-	_expect_dictionary(conflict.get("cloudMetadata", {}), ACCOUNT_SYNC_CONFLICT_RESPONSE["save"]["metadata"], "force_sync_profile conflict cloud metadata")
-	_expect_equal(conflict.get("localVersion", 0), 3, "force_sync_profile conflict local version")
-	_expect_equal(conflict.get("cloudVersion", 0), 5, "force_sync_profile conflict cloud version")
-	if not conflict.has("localUpdatedAtUnix") or not conflict.has("cloudUpdatedAt"):
-		_fail("force_sync_profile conflict should expose explicit local and cloud timestamps.")
-	if events.is_empty() or events[0].get("target", "") != "profile":
-		_fail("force_sync_profile conflict should notify onSyncResult with profile target.")
-
-
-func _check_conflict_helpers(game_saves_script: Script) -> void:
-	var persistly: Object = game_saves_script.new()
-	var events: Array = []
-	persistly.configure({
-		"runtime_key": "ps_test_replace_me",
-		"profileSaveId": "sv_profile",
-		"profileSessionToken": "pst_profile_session",
-		"localProfileKey": "validation-conflict",
-		"storage_path": _storage_path("conflict"),
-		"syncPolicy": {
-			"minRemoteSyncIntervalSeconds": 60,
-			"forceSyncCooldownSeconds": 10,
-			"syncOnAppBackground": true,
-			"syncOnAppForeground": true,
-			"syncOnReconnect": true,
-			"maxQueuedLocalSnapshots": 25,
-		},
-		"onSyncResult": func(result: Dictionary) -> void:
-			events.append(result),
-	})
-	persistly.save_slot("autosave", {
-		"level": 5,
-	}, {
-		"scene": "local",
-	})
-	persistly._slots["autosave"]["characterSaveId"] = "sv_char"
-	persistly._slots["autosave"]["version"] = 2
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/sync", 409, SYNC_CONFLICT_RESPONSE)
-
-	var conflict: Dictionary = persistly.force_sync("autosave", {
-		"bypassCooldown": true,
-	})
-	_expect_equal(conflict.get("status", ""), "conflict", "force_sync conflict status")
-	_expect_dictionary(conflict.get("localState", {}), {
-		"level": 5,
-	}, "force_sync conflict local state")
-	_expect_dictionary(conflict.get("cloudState", {}), SYNC_CONFLICT_RESPONSE["save"]["state"], "force_sync conflict cloud state")
-	if events.is_empty() or events[0].get("target", "") != "slot":
-		_fail("force_sync conflict should notify onSyncResult with slot target.")
-
-	var kept: Dictionary = persistly.keep_local_for_later("autosave")
-	_expect_equal(kept.get("dirty", false), true, "keep_local_for_later keeps slot dirty")
-	var accepted: Dictionary = persistly.accept_cloud_version("autosave")
-	_expect_equal(accepted.get("status", ""), "synced", "accept_cloud_version with conflict status")
-	_expect_dictionary(accepted.get("state", {}), SYNC_CONFLICT_RESPONSE["save"]["state"], "accept_cloud_version state")
-
-	persistly.save_slot("autosave", {
-		"level": 9,
-	}, {
-		"scene": "local",
-	})
-	persistly._slots["autosave"]["cloudVersion"] = 4
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/sync", 200, SYNC_ACCEPTED_RESPONSE)
-	var overwritten: Dictionary = persistly.overwrite_cloud_version("autosave", {
-		"bypassCooldown": true,
-	})
-	_expect_equal(overwritten.get("status", ""), "synced", "overwrite_cloud_version status")
-
-
-func _check_archive_and_clear(game_saves_script: Script) -> void:
-	var persistly: Object = game_saves_script.new()
-	persistly.configure({
-		"runtime_key": "ps_test_replace_me",
-		"profileSaveId": "sv_profile",
-		"profileSessionToken": "pst_profile_session",
-		"localProfileKey": "validation-archive",
-		"storage_path": _storage_path("archive"),
-	})
-	persistly.save_slot("autosave", {
-		"level": 5,
-	})
-	persistly._slots["autosave"]["characterSaveId"] = "sv_char"
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/archive", 200, ARCHIVE_RESPONSE)
-
-	var archived: Dictionary = persistly.archive_slot("autosave")
-	_expect_equal(archived.get("status", ""), "synced", "archive_slot status")
-	var active: Array = persistly.list_slots()
-	if not active.is_empty():
-		_fail("list_slots should exclude archived slots by default.")
-	var all_slots: Array = persistly.list_slots({
-		"includeArchived": true,
-	})
-	if all_slots.size() != 1 or not bool(all_slots[0].get("archived", false)):
-		_fail("list_slots includeArchived should include archived slots.")
-
-	var cleared: Dictionary = persistly.clear_local_slot("autosave")
-	_expect_equal(cleared.get("status", ""), "local_saved", "clear_local_slot status")
-	_expect_equal(persistly.load_slot("autosave").get("status", ""), "not_found", "clear_local_slot removes local slot")
-
-
-func _check_delete_profile_and_slot(game_saves_script: Script) -> void:
+func _check_clear_and_delete_boundaries(game_saves_script: Script) -> void:
 	var local_only: Object = game_saves_script.new()
 	local_only.configure({
 		"runtime_key": "ps_test_replace_me",
-		"localProfileKey": "validation-delete-local",
-		"storage_path": _storage_path("delete_local"),
+		"localAccountKey": "validation-clear",
+		"storage_path": _storage_path("clear"),
 	})
-	local_only.save_slot("autosave", {
-		"level": 2,
-	})
-	var local_deleted_slot: Dictionary = local_only.delete_slot("autosave")
-	_expect_equal(local_deleted_slot.get("status", ""), "local_saved", "delete_slot should clear unsynced local slots")
-	_expect_equal(local_only.load_slot("autosave").get("status", ""), "not_found", "delete_slot should remove unsynced local slot data")
-	local_only.save_slot("fresh", {
-		"level": 3,
-	})
-	var local_deleted_profile: Dictionary = local_only.delete_profile()
-	_expect_equal(local_deleted_profile.get("status", ""), "local_saved", "delete_profile should clear unsynced local profile state")
-	_expect_equal(local_only.load_slot("fresh").get("status", ""), "not_found", "delete_profile should remove unsynced local slots")
+	local_only.save_slot("autosave", {"level": 1})
+	var cleared: Dictionary = local_only.clear_local_account()
+	_expect_equal(cleared.get("status", ""), "local_saved", "clear_local_account status")
+	_expect_equal(local_only.load_slot("autosave").get("status", ""), "not_found", "clear_local_account removes slots")
 
-	var synced: Object = game_saves_script.new()
-	var events: Array = []
-	synced.configure({
+	var remote: Object = game_saves_script.new()
+	remote.configure({
 		"runtime_key": "ps_test_replace_me",
-		"profileSaveId": "sv_profile",
-		"profileSessionToken": "pst_profile_session",
-		"localProfileKey": "validation-delete-remote",
-		"storage_path": _storage_path("delete_remote"),
-		"onSyncResult": func(result: Dictionary) -> void:
-			events.append(result),
+		"accountId": "acc_test",
+		"accountSessionToken": "pst_account_session",
+		"localAccountKey": "validation-delete",
+		"storage_path": _storage_path("delete"),
 	})
-	synced.save_slot("autosave", {
-		"level": 4,
-	}, {
-		"scene": "starter",
+	remote._client.register_fixture_response("DELETE", "/api/v1/accounts/acc_test", 200, {
+		"accountId": "acc_test",
+		"deletedAt": "2026-05-29T10:05:00Z",
+		"deletedSlotCount": 1,
+		"alreadyDeleted": false,
+		"cleanupQueued": true,
 	})
-	synced._slots["autosave"]["characterSaveId"] = "sv_char"
-	synced._slots["autosave"]["version"] = 2
-	synced._client.register_fixture_response("DELETE", "/api/v1/profiles/sv_profile/characters/sv_char", 200, DELETE_CHARACTER_RESPONSE)
-	var deleted_slot: Dictionary = synced.delete_slot("autosave")
-	_expect_equal(deleted_slot.get("status", ""), "synced", "delete_slot should delete synced remote characters")
-	_expect_equal(deleted_slot.get("target", ""), "slot", "delete_slot target")
-	_expect_equal(synced.load_slot("autosave").get("status", ""), "not_found", "delete_slot should remove synced local slot data")
-	_expect_equal(int(synced.profile_version), 5, "delete_slot should refresh local profile version from returned profile payload")
-	if typeof(deleted_slot.get("warnings", null)) != TYPE_ARRAY or not (deleted_slot["warnings"] as Array).has("delete_cleanup_queued"):
-		_fail("delete_slot should surface delete_cleanup_queued warnings when backend cleanup is deferred.")
-
-	synced.save_slot("second", {
-		"level": 6,
-	})
-	synced._client.register_fixture_response("DELETE", "/api/v1/profiles/sv_profile", 200, DELETE_PROFILE_RESPONSE)
-	var deleted_profile: Dictionary = synced.delete_profile()
-	_expect_equal(deleted_profile.get("status", ""), "synced", "delete_profile should delete synced remote profiles")
-	_expect_equal(String(synced.get_profile_session({"includeToken": true}).get("profileSaveId", "")), "", "delete_profile should clear local profile session")
-	_expect_equal(synced.load_slot("second").get("status", ""), "not_found", "delete_profile should wipe local slots after remote delete")
-	if events.size() < 2:
-		_fail("delete profile + slot should notify onSyncResult for both operations.")
+	var deleted: Dictionary = remote.delete_account()
+	_expect_equal(deleted.get("status", ""), "synced", "delete_account status")
+	_expect_equal(remote.get_account_session({"includeToken": true}).get("accountId", ""), "", "delete_account clears account session")
 
 
-func _check_clear_local_profile(game_saves_script: Script) -> void:
+func _check_reserved_slot_info_rejected(game_saves_script: Script) -> void:
 	var persistly: Object = game_saves_script.new()
 	persistly.configure({
 		"runtime_key": "ps_test_replace_me",
-		"profileSaveId": "sv_old_profile",
-		"profileSessionToken": "pst_old_session",
-		"localProfileKey": "validation-clear-profile",
-		"storage_path": _storage_path("clear_profile"),
+		"localAccountKey": "validation-reserved",
+		"storage_path": _storage_path("reserved"),
 	})
-	persistly.save_slot("autosave", {
-		"level": 5,
-	})
-	var cleared: Dictionary = persistly.clear_local_profile()
-	_expect_equal(cleared.get("status", ""), "local_saved", "clear_local_profile status")
-	_expect_equal(String(persistly.get_profile_session({"includeToken": true}).get("profileSaveId", "")), "", "clear_local_profile removes local profileSaveId")
-	_expect_equal(String(persistly.get_profile_session({"includeToken": true}).get("profileSessionToken", "")), "", "clear_local_profile removes local profile session token")
-	_expect_equal(persistly.load_slot("autosave").get("status", ""), "not_found", "clear_local_profile removes local slots")
-
-	persistly._client.clear_recorded_requests()
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles", 201, FIRST_PROFILE_CREATE_WITH_CHARACTER_RESPONSE)
-	persistly.save_slot("fresh", {
-		"level": 9,
-	})
-	var synced: Dictionary = persistly.force_sync("fresh", {
-		"bypassCooldown": true,
-	})
-	_expect_equal(synced.get("status", ""), "synced", "clear_local_profile allows fresh profile bootstrap")
-	var requests: Array = persistly._client.get_recorded_requests()
-	if requests.is_empty() or requests[0].get("path", "") != "/api/v1/profiles":
-		_fail("clear_local_profile should force the next sync to create a fresh profile instead of reusing the old stored session.")
-
-
-func _check_archived_slot_can_be_reused(game_saves_script: Script) -> void:
-	var persistly: Object = game_saves_script.new()
-	persistly.configure({
-		"runtime_key": "ps_test_replace_me",
-		"profileSaveId": "sv_profile",
-		"profileSessionToken": "pst_profile_session",
-		"localProfileKey": "validation-archive-reuse",
-		"storage_path": _storage_path("archive_reuse"),
-	})
-	persistly.save_slot("autosave", {
-		"level": 5,
-	})
-	persistly._slots["autosave"]["characterSaveId"] = "sv_char"
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters/sv_char/archive", 200, ARCHIVE_RESPONSE)
-	persistly.archive_slot("autosave")
-
-	var replacement_local: Dictionary = persistly.save_slot("autosave", {
-		"level": 1,
-		"coins": 50,
-	}, {
-		"scene": "replacement",
-	})
-	_expect_equal(replacement_local.get("archived", true), false, "save_slot should reactivate a previously archived slot locally")
-	_expect_equal(replacement_local.get("characterSaveId", ""), "", "save_slot after archive should clear the archived characterSaveId")
-	persistly._client.register_fixture_response("POST", "/api/v1/profiles/sv_profile/characters", 201, REPLACEMENT_CHARACTER_CREATE_RESPONSE)
-
-	var replacement_synced: Dictionary = persistly.force_sync("autosave", {
-		"bypassCooldown": true,
-	})
-	_expect_equal(replacement_synced.get("status", ""), "synced", "force_sync should create replacement character for reused archived slot")
-	_expect_equal(replacement_synced.get("characterSaveId", ""), "sv_char_replacement", "force_sync should store replacement characterSaveId")
-
-
-func _check_rejects_reserved_developer_metadata(game_saves_script: Script) -> void:
-	var persistly: Object = game_saves_script.new()
-	persistly.configure({
-		"runtime_key": "ps_test_replace_me",
-		"localProfileKey": "validation-reserved-metadata",
-		"storage_path": _storage_path("reserved_metadata"),
-	})
-	var result: Dictionary = persistly.save_slot("autosave", {
-		"level": 1,
-	}, {
-		"_persistly": {
-			"slotKey": "hijack",
+	var result: Dictionary = persistly.save_slot("autosave", {"level": 1}, {
+		"slotInfo": {
+			"_persistly": {
+				"slotId": "autosave",
+			},
 		},
 	})
-	if result.get("status", "") != "invalid_request":
-		_fail("save_slot should reject developer metadata containing reserved _persistly.")
+	_expect_equal(result.get("status", ""), "invalid_request", "save_slot rejects reserved slotInfo")
 
 
-func _check_schema_versioned_file_persistence(game_saves_script: Script) -> void:
-	var storage_path := _storage_path("schema")
-	var first: Object = game_saves_script.new()
-	first.configure({
-		"runtime_key": "ps_test_replace_me",
-		"localProfileKey": "validation-schema",
-		"storage_path": storage_path,
-	})
-	first.save_slot("autosave", {
-		"level": 3,
-	})
-	first.save_account_data({
-		"diamonds": 7,
-	})
+func _account_with_slot(slot_id: String) -> Dictionary:
+	return {
+		"accountId": "acc_test",
+		"accountData": ACCOUNT["accountData"],
+		"slots": [
+			{
+				"slotId": slot_id,
+				"slotInfo": SLOT["slotInfo"],
+				"version": 1,
+				"status": "active",
+				"updatedAt": "2026-05-29T10:01:00Z",
+			},
+		],
+		"version": 1,
+		"updatedAt": "2026-05-29T10:01:00Z",
+	}
 
-	var second: Object = game_saves_script.new()
-	second.configure({
-		"runtime_key": "ps_test_replace_me",
-		"localProfileKey": "validation-schema",
-		"storage_path": storage_path,
-	})
-	_expect_equal(second.load_slot("autosave").get("status", ""), "local_found", "schema-versioned slot reload status")
-	_expect_equal(second.get_account_data().get("diamonds", 0), 7, "schema-versioned account data reload")
 
-	var profile_path := storage_path.path_join("validation-schema".uri_encode()).path_join("profile.json")
-	var profile_record: Variant = JSON.parse_string(FileAccess.get_file_as_string(profile_path))
-	if typeof(profile_record) != TYPE_DICTIONARY or profile_record.get("schema", "") != "persistly.godot.profile.v1":
-		_fail("profile persistence record should include schema persistly.godot.profile.v1.")
+func _expect_has_account_session_header(request: Dictionary) -> void:
+	var headers: Array = request.get("headers", [])
+	for header in headers:
+		if String(header).begins_with("X-Persistly-Account-Session:"):
+			return
+	_fail("Request should include X-Persistly-Account-Session.")
+
+
+func _storage_path(name: String) -> String:
+	return _run_storage_prefix.path_join(name)
 
 
 func _expect_equal(actual: Variant, expected: Variant, label: String) -> void:
@@ -1154,42 +291,12 @@ func _expect_equal(actual: Variant, expected: Variant, label: String) -> void:
 
 func _expect_dictionary(actual: Variant, expected: Dictionary, label: String) -> void:
 	if typeof(actual) != TYPE_DICTIONARY:
-		_fail(label + " should be a dictionary.")
+		_fail(label + " expected dictionary but got " + str(actual) + ".")
 		return
-	if not _variants_equal(actual, expected):
-		_fail(label + " expected " + JSON.stringify(expected) + " but got " + JSON.stringify(actual) + ".")
-
-
-func _variants_equal(actual: Variant, expected: Variant) -> bool:
-	var actual_type := typeof(actual)
-	var expected_type := typeof(expected)
-	if (actual_type == TYPE_INT or actual_type == TYPE_FLOAT) and (expected_type == TYPE_INT or expected_type == TYPE_FLOAT):
-		return is_equal_approx(float(actual), float(expected))
-	if actual_type == TYPE_DICTIONARY and expected_type == TYPE_DICTIONARY:
-		var actual_dict: Dictionary = actual
-		var expected_dict: Dictionary = expected
-		if actual_dict.size() != expected_dict.size():
-			return false
-		for key in expected_dict.keys():
-			if not actual_dict.has(key):
-				return false
-			if not _variants_equal(actual_dict[key], expected_dict[key]):
-				return false
-		return true
-	if actual_type == TYPE_ARRAY and expected_type == TYPE_ARRAY:
-		var actual_array: Array = actual
-		var expected_array: Array = expected
-		if actual_array.size() != expected_array.size():
-			return false
-		for index in range(expected_array.size()):
-			if not _variants_equal(actual_array[index], expected_array[index]):
-				return false
-		return true
-	return actual == expected
-
-
-func _storage_path(name: String) -> String:
-	return _run_storage_prefix.path_join(name)
+	for key in expected.keys():
+		if not (actual as Dictionary).has(key) or (actual as Dictionary)[key] != expected[key]:
+			_fail(label + " expected " + JSON.stringify(expected) + " but got " + JSON.stringify(actual) + ".")
+			return
 
 
 func _fail(message: String) -> void:

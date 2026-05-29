@@ -1,18 +1,27 @@
 extends SceneTree
 
-const BUNDLE_ROOT := "res://contracts/persistly-contract-v0.3.0"
-const MANIFEST_PATH := "res://contracts/persistly-contract-v0.3.0/manifest.json"
+const ACCOUNT_FIRST_BUNDLE := "persistly-contract-v0.4.0"
+const FALLBACK_BUNDLE := "persistly-contract-v0.3.0"
 
 
 func _initialize() -> void:
-	var manifest := _read_json_file(MANIFEST_PATH)
+	var bundle_name := ACCOUNT_FIRST_BUNDLE
+	var bundle_root := "res://contracts/" + ACCOUNT_FIRST_BUNDLE
+	var manifest_path := bundle_root.path_join("manifest.json")
+	if not FileAccess.file_exists(manifest_path):
+		print("Persistly account-first contract bundle " + ACCOUNT_FIRST_BUNDLE + " is not present; validating pinned fallback " + FALLBACK_BUNDLE + ".")
+		bundle_name = FALLBACK_BUNDLE
+		bundle_root = "res://contracts/" + FALLBACK_BUNDLE
+		manifest_path = bundle_root.path_join("manifest.json")
+
+	var manifest := _read_json_file(manifest_path)
 	if manifest.is_empty():
 		push_error("Persistly contract bundle validation failed: manifest could not be read.")
 		quit(1)
 		return
 
-	if manifest.get("bundle", "") != "persistly-contract-v0.3.0":
-		push_error("Persistly contract bundle validation failed: expected persistly-contract-v0.3.0.")
+	if manifest.get("bundle", "") != bundle_name:
+		push_error("Persistly contract bundle validation failed: expected " + bundle_name + ".")
 		quit(1)
 		return
 
@@ -38,7 +47,7 @@ func _initialize() -> void:
 			invalid.append("manifest entry is missing path, sha256, or bytes")
 			continue
 
-		var full_path := BUNDLE_ROOT.path_join(relative_path)
+		var full_path := bundle_root.path_join(relative_path)
 		if not FileAccess.file_exists(full_path):
 			missing.append(full_path)
 			continue
@@ -53,7 +62,7 @@ func _initialize() -> void:
 			mismatched.append(full_path + " (sha256)")
 
 	if missing.is_empty() and mismatched.is_empty() and invalid.is_empty():
-		print("Persistly contract bundle is valid at " + BUNDLE_ROOT + ".")
+		print("Persistly contract bundle is valid at " + bundle_root + ".")
 		quit(0)
 		return
 

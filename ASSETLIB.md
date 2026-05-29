@@ -16,7 +16,7 @@ Use this metadata for the Godot Asset Library submission.
 
 Persistly cloud saves for Godot games.
 
-The addon provides a game-friendly `PersistlyGameSaves` facade for named save slots such as `autosave`, local-first save/load behavior, profile account data, safe force sync, due-slot sync, profile sessions, and explicit local-vs-cloud conflict states.
+The addon provides a game-friendly `PersistlyGameSaves` facade for named save slots such as `autosave`, local-first save/load behavior, account data, safe force sync, due-slot sync, account sessions, and explicit local-vs-cloud conflict states.
 
 Use it for idle games, incremental games, RPG-lite games, browser/native Godot projects, and single-player progression games that need cloud saves without building a full backend.
 
@@ -29,7 +29,7 @@ addons/persistly/
 contracts/
 ```
 
-Both folders are required. The SDK reads the pinned Persistly contract bundle from `res://contracts/persistly-contract-v0.3.0`.
+Both folders are required. The account-first SDK expects `persistly-contract-v0.4.0` once the platform contract export is available; this checkout still includes the older fallback bundle and the validator reports that dependency.
 
 ## Tags
 

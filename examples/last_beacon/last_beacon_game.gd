@@ -4,17 +4,17 @@ const STATE_SCRIPT := preload("res://examples/last_beacon/last_beacon_state.gd")
 const STORE_SCRIPT := preload("res://examples/last_beacon/last_beacon_store.gd")
 const GAME_SAVES_SCRIPT := preload("res://addons/persistly/persistly_game_saves.gd")
 
-const PROFILE_PATH := "user://last_beacon_profile.json"
+const ACCOUNT_PATH := "user://last_beacon_account.json"
 const TICK_INTERVAL_SECONDS := 1.0
 const SLOT_KEY := "autosave"
 
 var _state
 var _store
 
-var _profile: Dictionary = {}
-var _profile_save_id: String = ""
-var _profile_session_token: String = ""
-var _character_save_id: String = ""
+var _account: Dictionary = {}
+var _account_id: String = ""
+var _account_session_token: String = ""
+var _slot_id: String = ""
 var _version: int = 0
 var _sync_status: String = "Local only"
 var _last_error: String = ""
@@ -42,12 +42,12 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
 	_state = STATE_SCRIPT.new()
-	_store = STORE_SCRIPT.new(PROFILE_PATH)
-	_profile = _store.load_profile()
+	_store = STORE_SCRIPT.new(ACCOUNT_PATH)
+	_account = _store.load_account()
 
-	_restore_profile_state()
+	_restore_account_state()
 	_build_ui()
-	_apply_profile_to_inputs()
+	_apply_account_to_inputs()
 	_create_timers()
 	_refresh_ui()
 
@@ -56,7 +56,7 @@ func _on_gather_pressed() -> void:
 	_state.gather()
 	_sync_status = "Local changes pending"
 	_last_error = ""
-	_save_profile()
+	_save_account()
 	_refresh_ui()
 
 
@@ -66,7 +66,7 @@ func _on_hire_worker_pressed() -> void:
 		_last_error = ""
 	else:
 		_last_error = "Not enough scrap to hire a worker."
-	_save_profile()
+	_save_account()
 	_refresh_ui()
 
 
@@ -76,7 +76,7 @@ func _on_upgrade_core_pressed() -> void:
 		_last_error = ""
 	else:
 		_last_error = "Not enough scrap to upgrade the beacon core."
-	_save_profile()
+	_save_account()
 	_refresh_ui()
 
 
@@ -96,16 +96,16 @@ func _on_resume_pressed() -> void:
 	_refresh_ui()
 
 	var persistly = _build_game_saves(config)
-	var ensure_result: Dictionary = persistly.ensure_profile()
+	var ensure_result: Dictionary = persistly.ensure_account()
 	if ensure_result.has("error"):
-		_last_error = String(ensure_result["error"].get("message", "Persistly profile create/load failed."))
-		_sync_status = "Profile connect failed"
+		_last_error = String(ensure_result["error"].get("message", "Persistly account create/load failed."))
+		_sync_status = "Account connect failed"
 	else:
-		_capture_profile_session(persistly)
+		_capture_account_session(persistly)
 		_sync_facade_slot(persistly)
 
 	_is_busy = false
-	_save_profile()
+	_save_account()
 	_refresh_ui()
 
 
@@ -128,19 +128,19 @@ func _sync_now() -> void:
 	_sync_facade_slot(persistly)
 
 	_is_busy = false
-	_save_profile()
+	_save_account()
 	_refresh_ui()
 
 
 func _on_new_beacon_pressed() -> void:
 	_state = STATE_SCRIPT.new()
-	_profile_save_id = ""
-	_profile_session_token = ""
-	_character_save_id = ""
+	_account_id = ""
+	_account_session_token = ""
+	_slot_id = ""
 	_version = 0
 	_sync_status = "New local run"
 	_last_error = ""
-	_save_profile()
+	_save_account()
 	_refresh_ui()
 
 
@@ -148,7 +148,7 @@ func _on_tick_timeout() -> void:
 	_state.tick(TICK_INTERVAL_SECONDS)
 	if _sync_status == "Synced":
 		_sync_status = "Local changes pending"
-	_save_profile()
+	_save_account()
 	_refresh_ui()
 
 
@@ -216,7 +216,7 @@ func _build_ui() -> void:
 
 	_runtime_key_input = _labeled_input(config_box, "Runtime Key", true)
 	_player_ref_input = _labeled_input(config_box, "Player reference", false)
-	_character_name_input = _labeled_input(config_box, "Character Name", false)
+	_character_name_input = _labeled_input(config_box, "Slot Name", false)
 	_slot_label_input = _labeled_input(config_box, "Slot Label", false)
 
 	_connect_button = _action_button("Connect / Resume Remote Save", Callable(self, "_on_resume_pressed"))
@@ -249,7 +249,7 @@ func _build_ui() -> void:
 	note_box.add_theme_constant_override("separation", 8)
 	note_panel.add_child(note_box)
 	note_box.add_child(_panel_title("How This Proves Persistly"))
-	note_box.add_child(_paragraph("This scene stores runtime config, profile session, and local idle state under user:// so you can close and reopen it without losing context."))
+	note_box.add_child(_paragraph("This scene stores runtime config, account session, and local idle state under user:// so you can close and reopen it without losing context."))
 	note_box.add_child(_paragraph("PersistlyGameSaves saves the autosave slot locally first. Use Sync Now or Connect / Resume Remote Save to explicitly push the slot to Persistly."))
 
 
@@ -304,7 +304,7 @@ func _labeled_input(parent: VBoxContainer, label_text: String, secret: bool) -> 
 	input.secret = secret
 	input.placeholder_text = label_text
 	input.text_submitted.connect(func(_text: String) -> void:
-		_save_profile()
+		_save_account()
 	)
 	wrapper.add_child(input)
 	return input
@@ -326,20 +326,20 @@ func _create_timers() -> void:
 	add_child(_tick_timer)
 
 
-func _apply_profile_to_inputs() -> void:
-	var config: Dictionary = _profile.get("config", {})
+func _apply_account_to_inputs() -> void:
+	var config: Dictionary = _account.get("config", {})
 	_runtime_key_input.text = String(config.get("runtimeKey", ""))
 	_player_ref_input.text = String(config.get("playerRef", ""))
 	_character_name_input.text = String(config.get("characterName", "Ayla"))
 	_slot_label_input.text = String(config.get("slotLabel", "Beacon-A"))
 
 
-func _restore_profile_state() -> void:
-	_profile_save_id = String(_profile.get("profileSaveId", ""))
-	_profile_session_token = String(_profile.get("profileSessionToken", ""))
-	_character_save_id = String(_profile.get("characterSaveId", ""))
-	_version = int(_profile.get("version", 0))
-	var saved_state = _profile.get("state", {})
+func _restore_account_state() -> void:
+	_account_id = String(_account.get("accountId", ""))
+	_account_session_token = String(_account.get("accountSessionToken", ""))
+	_slot_id = String(_account.get("slotId", ""))
+	_version = int(_account.get("version", 0))
+	var saved_state = _account.get("data", {})
 	if typeof(saved_state) == TYPE_DICTIONARY and not saved_state.is_empty():
 		var hydrated: bool = _state.from_save_state(saved_state)
 		if hydrated:
@@ -352,11 +352,11 @@ func _current_config() -> Dictionary:
 		"playerRef": _player_ref_input.text.strip_edges(),
 		"characterName": _character_name_input.text.strip_edges(),
 		"slotLabel": _slot_label_input.text.strip_edges(),
-		"localProfileKey": _local_profile_key(),
+		"localAccountKey": _local_account_key(),
 	}
 
 
-func _current_metadata() -> Dictionary:
+func _current_slot_info() -> Dictionary:
 	return {
 		"characterName": _character_name_input.text.strip_edges(),
 		"slotLabel": _slot_label_input.text.strip_edges(),
@@ -370,16 +370,18 @@ func _build_game_saves(config: Dictionary):
 	persistly.configure({
 		"runtimeKey": String(config.get("runtimeKey", "")),
 		"playerRef": _nullable_string(String(config.get("playerRef", ""))),
-		"localProfileKey": String(config.get("localProfileKey", "")),
-		"profileSaveId": _profile_save_id,
-		"profileSessionToken": _profile_session_token,
+		"localAccountKey": String(config.get("localAccountKey", "")),
+		"accountId": _account_id,
+		"accountSessionToken": _account_session_token,
 		"storage_path": "user://last_beacon_persistly",
 	})
 	return persistly
 
 
 func _sync_facade_slot(persistly) -> void:
-	var local_result: Dictionary = persistly.save_slot(SLOT_KEY, _state.to_save_state(), _current_metadata())
+	var local_result: Dictionary = persistly.save_slot(SLOT_KEY, _state.to_save_state(), {
+		"slotInfo": _current_slot_info(),
+	})
 	if local_result.has("error"):
 		_last_error = String(local_result["error"].get("message", "Persistly local save failed."))
 		_sync_status = "Local save failed"
@@ -388,7 +390,7 @@ func _sync_facade_slot(persistly) -> void:
 	var sync_result: Dictionary = persistly.force_sync(SLOT_KEY, {
 		"bypassCooldown": true,
 	})
-	_capture_profile_session(persistly)
+	_capture_account_session(persistly)
 	if sync_result.has("error"):
 		_last_error = String(sync_result["error"].get("message", "Persistly sync failed."))
 		_sync_status = "Sync failed"
@@ -404,29 +406,29 @@ func _sync_facade_slot(persistly) -> void:
 	_last_error = ""
 
 
-func _capture_profile_session(persistly) -> void:
-	var session: Dictionary = persistly.get_profile_session({
+func _capture_account_session(persistly) -> void:
+	var session: Dictionary = persistly.get_account_session({
 		"includeToken": true,
 	})
-	_profile_save_id = String(session.get("profileSaveId", _profile_save_id))
-	_profile_session_token = String(session.get("profileSessionToken", _profile_session_token))
+	_account_id = String(session.get("accountId", _account_id))
+	_account_session_token = String(session.get("accountSessionToken", _account_session_token))
 
 
 func _apply_facade_slot(slot: Dictionary) -> void:
-	_character_save_id = String(slot.get("characterSaveId", _character_save_id))
+	_slot_id = String(slot.get("slotId", _slot_id))
 	_version = int(slot.get("version", _version))
 
 
-func _save_profile() -> void:
-	_profile = {
+func _save_account() -> void:
+	_account = {
 		"config": _current_config(),
-		"profileSaveId": _profile_save_id,
-		"profileSessionToken": _profile_session_token,
-		"characterSaveId": _character_save_id,
+		"accountId": _account_id,
+		"accountSessionToken": _account_session_token,
+		"slotId": _slot_id,
 		"version": _version,
-		"state": _state.to_save_state(),
+		"data": _state.to_save_state(),
 	}
-	_store.save_profile(_profile)
+	_store.save_account(_account)
 
 
 func _refresh_ui() -> void:
@@ -444,9 +446,9 @@ func _refresh_ui() -> void:
 		_state.core_upgrade_cost(),
 	]
 
-	_save_label.text = "Profile: %s\nCharacter: %s\nVersion: %d" % [
-		_profile_save_id if not _profile_save_id.is_empty() else "Not created yet",
-		_character_save_id if not _character_save_id.is_empty() else "Not created yet",
+	_save_label.text = "Account: %s\nSlot: %s\nVersion: %d" % [
+		_account_id if not _account_id.is_empty() else "Not created yet",
+		_slot_id if not _slot_id.is_empty() else "Not created yet",
 		_version,
 	]
 	_sync_label.text = "Sync status: %s" % _sync_status
@@ -465,7 +467,7 @@ func _nullable_string(value: String) -> Variant:
 	return value
 
 
-func _local_profile_key() -> String:
+func _local_account_key() -> String:
 	var player_ref := _player_ref_input.text.strip_edges()
 	if not player_ref.is_empty():
 		return player_ref

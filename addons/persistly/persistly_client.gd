@@ -2,8 +2,8 @@ extends RefCounted
 class_name PersistlyClient
 
 const SDK_VERSION := "1.0.0"
-const BUNDLE_VERSION := "persistly-contract-v0.3.0"
-const BUNDLE_ROOT := "res://contracts/persistly-contract-v0.3.0"
+const BUNDLE_VERSION := "persistly-contract-v0.4.0"
+const BUNDLE_ROOT := "res://contracts/persistly-contract-v0.4.0"
 const PERSISTLY_API_ORIGIN := "https://api.persistly.app"
 const DEFAULT_TIMEOUT_SECONDS := 30.0
 const METADATA_MAX_BYTES := 16384
@@ -15,9 +15,9 @@ const ERROR_FORBIDDEN := "forbidden"
 const ERROR_NOT_FOUND := "not_found"
 const ERROR_CONFLICT := "conflict"
 const ERROR_SLOT_ALREADY_EXISTS := "slot_already_exists"
-const ERROR_CHARACTER_ARCHIVED := "character_archived"
-const ERROR_PROFILE_DELETED := "profile_deleted"
-const ERROR_CHARACTER_DELETED := "character_deleted"
+const ERROR_SLOT_ARCHIVED := "slot_archived"
+const ERROR_ACCOUNT_DELETED := "account_deleted"
+const ERROR_SLOT_DELETED := "slot_deleted"
 const ERROR_RATE_LIMITED := "rate_limited"
 const ERROR_MONTHLY_QUOTA_EXCEEDED := "monthly_quota_exceeded"
 const ERROR_PAYLOAD_TOO_LARGE := "payload_too_large"
@@ -129,111 +129,103 @@ func sync_save(save_id: String, payload: Dictionary) -> Dictionary:
 	return _normalize_sync_response(response, true, "sync_save", save_id, metadata, payload["state"])
 
 
-func create_profile(payload: Dictionary = {}) -> Dictionary:
-	var preflight := _validate_runtime_configuration("create_profile")
+func create_account(payload: Dictionary = {}) -> Dictionary:
+	var preflight := _validate_runtime_configuration("create_account")
 	if not preflight.is_empty():
 		return preflight
 
 	var account_data := payload.get("accountData", {})
-	var profile_metadata := payload.get("profileMetadata", {})
 	if typeof(account_data) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, "create_profile accountData must be a dictionary.")
-	if typeof(profile_metadata) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, "create_profile profileMetadata must be a dictionary when provided.")
+		return _error_result(ERROR_INVALID_REQUEST, "create_account accountData must be a dictionary.")
 
-	var profile_payload_error := _validate_payload_sizes(profile_metadata, account_data)
-	if not profile_payload_error.is_empty():
-		return profile_payload_error
+	var account_payload_error := _validate_payload_sizes({}, account_data)
+	if not account_payload_error.is_empty():
+		return account_payload_error
 
 	var request_body: Dictionary = {
 		"accountData": account_data,
-		"profileMetadata": profile_metadata,
 	}
 	if payload.has("playerRef"):
 		var player_ref = payload.get("playerRef")
 		if not (typeof(player_ref) == TYPE_STRING or player_ref == null):
 			return _error_result(ERROR_INVALID_REQUEST, "playerRef must be a string or null.")
 		request_body["playerRef"] = player_ref
-	if payload.has("externalProfileRef"):
-		var external_profile_ref = payload.get("externalProfileRef")
-		if not (typeof(external_profile_ref) == TYPE_DICTIONARY or external_profile_ref == null):
-			return _error_result(ERROR_INVALID_REQUEST, "externalProfileRef must be a dictionary or null.")
-		request_body["externalProfileRef"] = external_profile_ref
+	if payload.has("externalAccountRef"):
+		var external_account_ref = payload.get("externalAccountRef")
+		if not (typeof(external_account_ref) == TYPE_DICTIONARY or external_account_ref == null):
+			return _error_result(ERROR_INVALID_REQUEST, "externalAccountRef must be a dictionary or null.")
+		request_body["externalAccountRef"] = external_account_ref
 
-	if payload.has("characterState") or payload.has("characterMetadata"):
-		return _error_result(ERROR_INVALID_REQUEST, "create_profile accepts character.metadata and character.state; characterState and characterMetadata are not supported.")
+	var slot = payload.get("slot", null)
+	if slot != null:
+		if typeof(slot) != TYPE_DICTIONARY:
+			return _error_result(ERROR_INVALID_REQUEST, "create_account slot must be a dictionary when provided.")
+		var slot_request := _normalize_slot_request(slot, "create_account")
+		if slot_request.has("error"):
+			return slot_request
+		request_body["slot"] = slot_request
 
-	var character = payload.get("character", null)
-	if character != null:
-		if typeof(character) != TYPE_DICTIONARY:
-			return _error_result(ERROR_INVALID_REQUEST, "create_profile character must be a dictionary when provided.")
-		var character_request := _normalize_character_request(character, "create_profile")
-		if character_request.has("error"):
-			return character_request
-		request_body["character"] = character_request
-
-	var response := _request_json("POST", "/api/v1/profiles", request_body)
+	var response := _request_json("POST", "/api/v1/accounts", request_body)
 	if response.has("error"):
 		return response
 
-	return _normalize_profile_response(response, true, true)
+	return _normalize_account_response(response, true, true)
 
 
-func load_profile(profile_save_id: String, profile_session_token: String) -> Dictionary:
-	var preflight := _validate_profile_session_configuration("load_profile", profile_save_id, profile_session_token)
+func load_account(account_id: String, account_session_token: String) -> Dictionary:
+	var preflight := _validate_account_session_configuration("load_account", account_id, account_session_token)
 	if not preflight.is_empty():
 		return preflight
 
 	var response := _request_json(
 		"GET",
-		"/api/v1/profiles/" + _url_encode(profile_save_id),
+		"/api/v1/accounts/" + _url_encode(account_id),
 		null,
-		profile_session_token)
+		account_session_token)
 	if response.has("error"):
 		return response
 
-	return _normalize_profile_response(response, true, false)
+	return _normalize_account_response(response, true, false)
 
 
-func delete_profile(profile_save_id: String, profile_session_token: String) -> Dictionary:
-	var preflight := _validate_profile_session_configuration("delete_profile", profile_save_id, profile_session_token)
+func delete_account(account_id: String, account_session_token: String) -> Dictionary:
+	var preflight := _validate_account_session_configuration("delete_account", account_id, account_session_token)
 	if not preflight.is_empty():
 		return preflight
 
 	var response := _request_json(
 		"DELETE",
-		"/api/v1/profiles/" + _url_encode(profile_save_id),
+		"/api/v1/accounts/" + _url_encode(account_id),
 		null,
-		profile_session_token)
+		account_session_token)
 	if response.has("error"):
 		return response
 
-	return _normalize_delete_profile_response(response, profile_save_id)
+	return _normalize_delete_account_response(response, account_id)
 
 
-func sync_profile_account_data(profile_save_id: String, profile_session_token: String, payload: Dictionary) -> Dictionary:
-	var preflight := _validate_profile_session_configuration("sync_profile_account_data", profile_save_id, profile_session_token)
+func sync_account_data(account_id: String, account_session_token: String, payload: Dictionary) -> Dictionary:
+	var preflight := _validate_account_session_configuration("sync_account_data", account_id, account_session_token)
 	if not preflight.is_empty():
 		return preflight
 
-	if payload.has("characterSlots") or payload.has("characters"):
-		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data cannot rewrite profile character slot refs.")
+	if payload.has("slots"):
+		return _error_result(ERROR_INVALID_REQUEST, "sync_account_data cannot rewrite account slot refs.")
 
 	var base_version = payload.get("baseVersion", null)
-	if base_version == null and _save_cache.has(profile_save_id):
-		base_version = int(_save_cache[profile_save_id].get("version", 0))
+	if base_version == null and _save_cache.has(account_id):
+		base_version = int(_save_cache[account_id].get("version", 0))
 	if base_version == null:
-		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data requires baseVersion unless the profile is already cached.")
+		return _error_result(ERROR_INVALID_REQUEST, "sync_account_data requires baseVersion unless the account is already cached.")
 	if typeof(base_version) != TYPE_INT:
-		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data baseVersion must be an integer.")
+		return _error_result(ERROR_INVALID_REQUEST, "sync_account_data baseVersion must be an integer.")
 
 	var has_account_data := payload.has("accountData")
 	var has_account_data_patch := payload.has("accountDataPatch")
-	var has_metadata := payload.has("metadata")
 	if has_account_data and has_account_data_patch:
-		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data accepts accountData or accountDataPatch, not both.")
-	if not has_account_data and not has_account_data_patch and not has_metadata:
-		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data requires accountData, accountDataPatch, or metadata.")
+		return _error_result(ERROR_INVALID_REQUEST, "sync_account_data accepts accountData or accountDataPatch, not both.")
+	if not has_account_data and not has_account_data_patch:
+		return _error_result(ERROR_INVALID_REQUEST, "sync_account_data requires accountData or accountDataPatch.")
 
 	var request_body: Dictionary = {
 		"baseVersion": base_version,
@@ -241,7 +233,7 @@ func sync_profile_account_data(profile_save_id: String, profile_session_token: S
 	if has_account_data:
 		var account_data = payload["accountData"]
 		if typeof(account_data) != TYPE_DICTIONARY:
-			return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data accountData must be a dictionary.")
+			return _error_result(ERROR_INVALID_REQUEST, "sync_account_data accountData must be a dictionary.")
 		var payload_error := _validate_payload_sizes({}, account_data)
 		if not payload_error.is_empty():
 			return payload_error
@@ -249,147 +241,136 @@ func sync_profile_account_data(profile_save_id: String, profile_session_token: S
 	if has_account_data_patch:
 		var account_data_patch = payload["accountDataPatch"]
 		if typeof(account_data_patch) != TYPE_DICTIONARY:
-			return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data accountDataPatch must be a dictionary.")
+			return _error_result(ERROR_INVALID_REQUEST, "sync_account_data accountDataPatch must be a dictionary.")
 		var patch_error := _validate_payload_sizes({}, account_data_patch)
 		if not patch_error.is_empty():
 			return patch_error
 		request_body["accountDataPatch"] = account_data_patch
-	if has_metadata:
-		var metadata = payload["metadata"]
-		if not (typeof(metadata) == TYPE_DICTIONARY or metadata == null):
-			return _error_result(ERROR_INVALID_REQUEST, "sync_profile_account_data metadata must be a dictionary or null.")
-		var metadata_error := _validate_payload_sizes({} if metadata == null else metadata, {})
-		if not metadata_error.is_empty():
-			return metadata_error
-		request_body["metadata"] = metadata
-
 	var response := _request_json(
 		"POST",
-		"/api/v1/profiles/" + _url_encode(profile_save_id) + "/account-data/sync",
+		"/api/v1/accounts/" + _url_encode(account_id) + "/data/sync",
 		request_body,
-		profile_session_token)
+		account_session_token)
 	if response.has("error"):
 		return response
 
-	return _normalize_sync_response(response, true, "sync_profile_account_data", profile_save_id, request_body.get("metadata", "__persistly_missing__"), _profile_state_from_sync(profile_save_id, request_body))
+	return _normalize_account_sync_response(response, true, "sync_account_data", account_id, request_body)
 
 
-func create_profile_character(profile_save_id: String, profile_session_token: String, payload: Dictionary) -> Dictionary:
-	var preflight := _validate_profile_session_configuration("create_profile_character", profile_save_id, profile_session_token)
+func create_account_slot(account_id: String, account_session_token: String, payload: Dictionary) -> Dictionary:
+	var preflight := _validate_account_session_configuration("create_account_slot", account_id, account_session_token)
 	if not preflight.is_empty():
 		return preflight
 
-	var character_request := _normalize_character_request(payload, "create_profile_character")
-	if character_request.has("error"):
-		return character_request
+	var slot_request := _normalize_slot_request(payload, "create_account_slot")
+	if slot_request.has("error"):
+		return slot_request
 
 	var response := _request_json(
 		"POST",
-		"/api/v1/profiles/" + _url_encode(profile_save_id) + "/characters",
-		character_request,
-		profile_session_token)
+		"/api/v1/accounts/" + _url_encode(account_id) + "/slots",
+		slot_request,
+		account_session_token)
 	if response.has("error"):
 		return response
 
-	return _normalize_profile_response(response, true, false)
+	return _normalize_account_response(response, true, false)
 
 
-func load_profile_character(profile_save_id: String, profile_session_token: String, character_save_id: String) -> Dictionary:
-	var preflight := _validate_profile_session_configuration("load_profile_character", profile_save_id, profile_session_token)
+func load_account_slot(account_id: String, account_session_token: String, slot_id: String) -> Dictionary:
+	var preflight := _validate_account_session_configuration("load_account_slot", account_id, account_session_token)
 	if not preflight.is_empty():
 		return preflight
-	if character_save_id.is_empty():
-		return _error_result(ERROR_INVALID_REQUEST, "load_profile_character requires a non-empty character_save_id.")
+	if slot_id.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "load_account_slot requires a non-empty slot_id.")
 
 	var response := _request_json(
 		"GET",
-		"/api/v1/profiles/" + _url_encode(profile_save_id) + "/characters/" + _url_encode(character_save_id),
+		"/api/v1/accounts/" + _url_encode(account_id) + "/slots/" + _url_encode(slot_id),
 		null,
-		profile_session_token)
+		account_session_token)
 	if response.has("error"):
 		return response
 
-	return _normalize_save_envelope(response, true)
+	return _normalize_slot_envelope(response, true)
 
 
-func delete_profile_character(profile_save_id: String, profile_session_token: String, character_save_id: String) -> Dictionary:
-	var preflight := _validate_profile_session_configuration("delete_profile_character", profile_save_id, profile_session_token)
+func delete_account_slot(account_id: String, account_session_token: String, slot_id: String) -> Dictionary:
+	var preflight := _validate_account_session_configuration("delete_account_slot", account_id, account_session_token)
 	if not preflight.is_empty():
 		return preflight
-	if character_save_id.is_empty():
-		return _error_result(ERROR_INVALID_REQUEST, "delete_profile_character requires a non-empty character_save_id.")
+	if slot_id.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "delete_account_slot requires a non-empty slot_id.")
 
 	var response := _request_json(
 		"DELETE",
-		"/api/v1/profiles/" + _url_encode(profile_save_id) + "/characters/" + _url_encode(character_save_id),
+		"/api/v1/accounts/" + _url_encode(account_id) + "/slots/" + _url_encode(slot_id),
 		null,
-		profile_session_token)
+		account_session_token)
 	if response.has("error"):
 		return response
 
-	return _normalize_delete_profile_character_response(response, character_save_id)
+	return _normalize_delete_account_slot_response(response, slot_id)
 
 
-func sync_profile_character(profile_save_id: String, profile_session_token: String, character_save_id: String, payload: Dictionary) -> Dictionary:
-	var preflight := _validate_profile_session_configuration("sync_profile_character", profile_save_id, profile_session_token)
+func sync_account_slot(account_id: String, account_session_token: String, slot_id: String, payload: Dictionary) -> Dictionary:
+	var preflight := _validate_account_session_configuration("sync_account_slot", account_id, account_session_token)
 	if not preflight.is_empty():
 		return preflight
-	if character_save_id.is_empty():
-		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_character requires a non-empty character_save_id.")
+	if slot_id.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "sync_account_slot requires a non-empty slot_id.")
 
-	if typeof(payload.get("state", null)) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_character requires a dictionary state payload.")
+	if typeof(payload.get("data", payload.get("state", null))) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "sync_account_slot requires a dictionary data payload.")
 
-	var metadata := payload.get("metadata", {})
-	if typeof(metadata) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_character metadata must be a dictionary when provided.")
-	var metadata_error := _validate_character_metadata(metadata, "sync_profile_character")
-	if not metadata_error.is_empty():
-		return metadata_error
+	var slot_info := payload.get("slotInfo", payload.get("metadata", {}))
+	if typeof(slot_info) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "sync_account_slot slotInfo must be a dictionary when provided.")
 
 	var base_version = payload.get("baseVersion", null)
-	if base_version == null and _save_cache.has(character_save_id):
-		base_version = int(_save_cache[character_save_id].get("version", 0))
+	if base_version == null and _save_cache.has(slot_id):
+		base_version = int(_save_cache[slot_id].get("version", 0))
 	if base_version == null:
-		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_character requires baseVersion unless the character save is already cached.")
+		return _error_result(ERROR_INVALID_REQUEST, "sync_account_slot requires baseVersion unless the slot save is already cached.")
 	if typeof(base_version) != TYPE_INT:
-		return _error_result(ERROR_INVALID_REQUEST, "sync_profile_character baseVersion must be an integer.")
+		return _error_result(ERROR_INVALID_REQUEST, "sync_account_slot baseVersion must be an integer.")
 
-	var payload_error := _validate_payload_sizes(metadata, payload["state"])
+	var data: Dictionary = payload.get("data", payload.get("state", {}))
+	var payload_error := _validate_payload_sizes(slot_info, data)
 	if not payload_error.is_empty():
 		return payload_error
 
 	var response := _request_json(
 		"POST",
-		"/api/v1/profiles/" + _url_encode(profile_save_id) + "/characters/" + _url_encode(character_save_id) + "/sync",
+		"/api/v1/accounts/" + _url_encode(account_id) + "/slots/" + _url_encode(slot_id) + "/sync",
 		{
 			"baseVersion": base_version,
-			"metadata": metadata,
-			"state": payload["state"],
+			"slotInfo": slot_info,
+			"data": data,
 		},
-		profile_session_token)
+		account_session_token)
 	if response.has("error"):
 		return response
 
-	return _normalize_sync_response(response, true, "sync_profile_character", character_save_id, metadata, payload["state"])
+	return _normalize_slot_sync_response(response, true, "sync_account_slot", slot_id, slot_info, data)
 
 
-func archive_profile_character(profile_save_id: String, profile_session_token: String, character_save_id: String) -> Dictionary:
-	var preflight := _validate_profile_session_configuration("archive_profile_character", profile_save_id, profile_session_token)
+func archive_account_slot(account_id: String, account_session_token: String, slot_id: String) -> Dictionary:
+	var preflight := _validate_account_session_configuration("archive_account_slot", account_id, account_session_token)
 	if not preflight.is_empty():
 		return preflight
-	if character_save_id.is_empty():
-		return _error_result(ERROR_INVALID_REQUEST, "archive_profile_character requires a non-empty character_save_id.")
+	if slot_id.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "archive_account_slot requires a non-empty slot_id.")
 
 	var response := _request_json(
 		"POST",
-		"/api/v1/profiles/" + _url_encode(profile_save_id) + "/characters/" + _url_encode(character_save_id) + "/archive",
+		"/api/v1/accounts/" + _url_encode(account_id) + "/slots/" + _url_encode(slot_id) + "/archive",
 		null,
-		profile_session_token)
+		account_session_token)
 	if response.has("error"):
 		return response
 
-	return _normalize_profile_response(response, true, false)
+	return _normalize_account_response(response, true, false)
 
 
 func get_runtime_config(game_config_version: int = -1) -> Dictionary:
@@ -444,45 +425,43 @@ func clear_recorded_requests() -> void:
 	_recorded_requests.clear()
 
 
-func _normalize_character_request(payload: Dictionary, action: String) -> Dictionary:
-	var metadata := payload.get("metadata", {})
-	var state = payload.get("state", null)
-	if typeof(metadata) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, action + " character metadata must be a dictionary.")
-	if typeof(state) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, action + " requires a dictionary character state payload.")
+func _normalize_slot_request(payload: Dictionary, action: String) -> Dictionary:
+	var slot_id := String(payload.get("slotId", ""))
+	if slot_id.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, action + " requires slotId.")
+	if not _is_valid_slot_id(slot_id):
+		return _error_result(ERROR_INVALID_REQUEST, action + " slotId must match ^[A-Za-z0-9_.-]{1,64}$.", {
+			"slotId": slot_id,
+		})
 
-	var metadata_error := _validate_character_metadata(metadata, action)
-	if not metadata_error.is_empty():
-		return metadata_error
-	var payload_error := _validate_payload_sizes(metadata, state)
+	var slot_info := payload.get("slotInfo", payload.get("metadata", {}))
+	var data = payload.get("data", payload.get("state", null))
+	if typeof(slot_info) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, action + " slotInfo must be a dictionary.")
+	if typeof(data) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, action + " requires a dictionary data payload.")
+
+	var payload_error := _validate_payload_sizes(slot_info, data)
 	if not payload_error.is_empty():
 		return payload_error
 	return {
-		"metadata": metadata,
-		"state": state,
+		"slotId": slot_id,
+		"slotInfo": slot_info,
+		"data": data,
 	}
 
 
-func _validate_character_metadata(metadata: Dictionary, action: String) -> Dictionary:
-	var persistly_metadata = metadata.get("_persistly", null)
-	if typeof(persistly_metadata) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, action + " metadata._persistly.slotKey is required.")
-	var slot_key := String((persistly_metadata as Dictionary).get("slotKey", ""))
-	if not _is_valid_slot_key(slot_key):
-		return _error_result(ERROR_INVALID_REQUEST, action + " metadata._persistly.slotKey must match ^[A-Za-z0-9_.-]{1,64}$.", {
-			"slotKey": slot_key,
-		})
-	if (persistly_metadata as Dictionary).size() != 1:
-		return _error_result(ERROR_INVALID_REQUEST, action + " metadata._persistly may only contain the SDK-owned slotKey.")
+func _validate_slot_metadata(metadata: Dictionary, action: String) -> Dictionary:
+	if metadata.has("_persistly"):
+		return _error_result(ERROR_INVALID_REQUEST, action + " slotInfo must not contain reserved _persistly fields.")
 	return {}
 
 
-func _is_valid_slot_key(slot_key: String) -> bool:
-	if slot_key.length() < 1 or slot_key.length() > 64:
+func _is_valid_slot_id(slot_id: String) -> bool:
+	if slot_id.length() < 1 or slot_id.length() > 64:
 		return false
-	for index in range(slot_key.length()):
-		var code := slot_key.unicode_at(index)
+	for index in range(slot_id.length()):
+		var code := slot_id.unicode_at(index)
 		var is_digit := code >= 48 and code <= 57
 		var is_upper := code >= 65 and code <= 90
 		var is_lower := code >= 97 and code <= 122
@@ -500,20 +479,20 @@ func _validate_runtime_configuration(action: String) -> Dictionary:
 	return {}
 
 
-func _validate_profile_session_configuration(action: String, profile_save_id: String, profile_session_token: String) -> Dictionary:
+func _validate_account_session_configuration(action: String, account_id: String, account_session_token: String) -> Dictionary:
 	var preflight := _validate_runtime_configuration(action)
 	if not preflight.is_empty():
 		return preflight
-	if profile_save_id.is_empty():
-		return _error_result(ERROR_INVALID_REQUEST, action + " requires a non-empty profile_save_id.")
-	if profile_session_token.is_empty():
-		return _error_result(ERROR_FORBIDDEN, action + " requires a non-empty profile_session_token.")
+	if account_id.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, action + " requires a non-empty account_id.")
+	if account_session_token.is_empty():
+		return _error_result(ERROR_FORBIDDEN, action + " requires a non-empty account_session_token.")
 	return {}
 
 
-func _request_json(method: String, path: String, body: Variant = null, profile_session_token: String = "") -> Dictionary:
-	var headers := _request_headers(profile_session_token)
-	_record_request(method, path, body, profile_session_token, headers)
+func _request_json(method: String, path: String, body: Variant = null, account_session_token: String = "") -> Dictionary:
+	var headers := _request_headers(account_session_token)
+	_record_request(method, path, body, account_session_token, headers)
 	var fixture := _pop_fixture_response(method, path)
 	if not fixture.is_empty():
 		return _parse_transport_response(int(fixture.get("status_code", 500)), String(fixture.get("body", "")))
@@ -557,7 +536,7 @@ func _request_json(method: String, path: String, body: Variant = null, profile_s
 	return response
 
 
-func _request_headers(profile_session_token: String) -> PackedStringArray:
+func _request_headers(account_session_token: String) -> PackedStringArray:
 	var headers := PackedStringArray([
 		"Authorization: Bearer " + runtime_key,
 		"Content-Type: application/json",
@@ -567,12 +546,12 @@ func _request_headers(profile_session_token: String) -> PackedStringArray:
 		"X-Persistly-SDK-Version: " + SDK_VERSION,
 		"X-Persistly-Platform: godot",
 	])
-	if not profile_session_token.is_empty():
-		headers.append("X-Persistly-Profile-Session: " + profile_session_token)
+	if not account_session_token.is_empty():
+		headers.append("X-Persistly-Account-Session: " + account_session_token)
 	return headers
 
 
-func _record_request(method: String, path: String, body: Variant, profile_session_token: String, headers: PackedStringArray) -> void:
+func _record_request(method: String, path: String, body: Variant, account_session_token: String, headers: PackedStringArray) -> void:
 	var recorded_body = body
 	if typeof(body) == TYPE_DICTIONARY or typeof(body) == TYPE_ARRAY:
 		recorded_body = body.duplicate(true)
@@ -583,7 +562,7 @@ func _record_request(method: String, path: String, body: Variant, profile_sessio
 		"method": method.to_upper(),
 		"path": path,
 		"body": recorded_body,
-		"profileSessionToken": profile_session_token,
+		"accountSessionToken": account_session_token,
 		"headers": recorded_headers,
 	})
 
@@ -690,7 +669,7 @@ func _parse_transport_response(status_code: int, body_text: String) -> Dictionar
 
 	if status_code == 409 and typeof(parsed) == TYPE_DICTIONARY:
 		var parsed_dict: Dictionary = parsed
-		if parsed_dict.get("status", "") == "conflict" and parsed_dict.has("save"):
+		if parsed_dict.get("status", "") == "conflict" and (parsed_dict.has("save") or parsed_dict.has("account") or parsed_dict.has("slot")):
 			return parsed_dict
 
 	if typeof(parsed) == TYPE_DICTIONARY and (parsed as Dictionary).has("error"):
@@ -717,8 +696,56 @@ func _normalize_save_envelope(response: Dictionary, cache_result: bool) -> Dicti
 	return normalized
 
 
-func _profile_state_from_sync(profile_save_id: String, request_body: Dictionary) -> Dictionary:
-	var cached: Dictionary = _save_cache.get(profile_save_id, {})
+func _normalize_slot_envelope(response: Dictionary, cache_result: bool) -> Dictionary:
+	var slot_value = response.get("slot", response)
+	if typeof(slot_value) != TYPE_DICTIONARY:
+		return _error_result(ERROR_SERVER, "Persistly slot response is missing slot.")
+	var slot := _normalize_slot_object(slot_value, cache_result)
+	if slot.has("error"):
+		return slot
+	var normalized := _copy_response_extras(response, ["slot"])
+	normalized["slot"] = slot
+	return normalized
+
+
+func _normalize_account_object(account: Dictionary, cache_result: bool) -> Dictionary:
+	if typeof(account.get("accountId", null)) != TYPE_STRING or String(account.get("accountId", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly account payload is missing accountId.")
+	if typeof(account.get("accountData", null)) != TYPE_DICTIONARY:
+		return _error_result(ERROR_SERVER, "Persistly account payload is missing accountData.")
+	if typeof(account.get("slots", null)) != TYPE_ARRAY:
+		return _error_result(ERROR_SERVER, "Persistly account payload is missing slots.")
+	if not (typeof(account.get("version", null)) == TYPE_INT or typeof(account.get("version", null)) == TYPE_FLOAT):
+		return _error_result(ERROR_SERVER, "Persistly account payload is missing version.")
+
+	var normalized := _duplicate_dictionary(account)
+	normalized["version"] = int(account["version"])
+	if cache_result:
+		_save_cache[String(account["accountId"])] = normalized.duplicate(true)
+	return normalized
+
+
+func _normalize_slot_object(slot: Dictionary, cache_result: bool) -> Dictionary:
+	if typeof(slot.get("slotId", null)) != TYPE_STRING or String(slot.get("slotId", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly slot payload is missing slotId.")
+	if typeof(slot.get("slotInfo", null)) != TYPE_DICTIONARY:
+		return _error_result(ERROR_SERVER, "Persistly slot payload is missing slotInfo.")
+	if slot.has("data") and typeof(slot["data"]) != TYPE_DICTIONARY:
+		return _error_result(ERROR_SERVER, "Persistly slot payload data must be a dictionary.")
+	if not (typeof(slot.get("version", null)) == TYPE_INT or typeof(slot.get("version", null)) == TYPE_FLOAT):
+		return _error_result(ERROR_SERVER, "Persistly slot payload is missing version.")
+
+	var normalized := _duplicate_dictionary(slot)
+	normalized["version"] = int(slot["version"])
+	if not normalized.has("data"):
+		normalized["data"] = {}
+	if cache_result:
+		_save_cache[String(slot["slotId"])] = normalized.duplicate(true)
+	return normalized
+
+
+func _account_state_from_sync(account_id: String, request_body: Dictionary) -> Dictionary:
+	var cached: Dictionary = _save_cache.get(account_id, {})
 	var cached_state: Dictionary = cached.get("state", {}) if typeof(cached.get("state", {})) == TYPE_DICTIONARY else {}
 	var account_data: Dictionary = {}
 	if request_body.has("accountData"):
@@ -732,11 +759,41 @@ func _profile_state_from_sync(profile_save_id: String, request_body: Dictionary)
 				account_data[key] = request_body["accountDataPatch"][key]
 	else:
 		account_data = (cached_state.get("accountData", {}) as Dictionary).duplicate(true) if typeof(cached_state.get("accountData", {})) == TYPE_DICTIONARY else {}
-	var character_slots: Array = (cached_state.get("characterSlots", []) as Array).duplicate(true) if typeof(cached_state.get("characterSlots", [])) == TYPE_ARRAY else []
+	var slot_slots: Array = (cached_state.get("slots", []) as Array).duplicate(true) if typeof(cached_state.get("slots", [])) == TYPE_ARRAY else []
 	return {
-		"schema": "persistly.profile.v1",
+		"schema": "persistly.account.v1",
 		"accountData": account_data,
-		"characterSlots": character_slots,
+		"slots": slot_slots,
+	}
+
+
+func _synthesize_account_from_sync(account_id: String, request_body: Dictionary, response: Dictionary) -> Dictionary:
+	var cached: Dictionary = _save_cache.get(account_id, {})
+	var account_data: Dictionary = cached.get("accountData", {}).duplicate(true) if typeof(cached.get("accountData", {})) == TYPE_DICTIONARY else {}
+	if request_body.has("accountData"):
+		account_data = (request_body["accountData"] as Dictionary).duplicate(true)
+	elif request_body.has("accountDataPatch"):
+		for key in (request_body["accountDataPatch"] as Dictionary).keys():
+			if request_body["accountDataPatch"][key] == null:
+				account_data.erase(key)
+			else:
+				account_data[key] = request_body["accountDataPatch"][key]
+	return {
+		"accountId": account_id,
+		"accountData": account_data,
+		"slots": cached.get("slots", []).duplicate(true) if typeof(cached.get("slots", [])) == TYPE_ARRAY else [],
+		"version": int(response["version"]),
+		"updatedAt": String(response["updatedAt"]),
+	}
+
+
+func _synthesize_slot_from_sync(slot_id: String, slot_info: Dictionary, data: Dictionary, response: Dictionary) -> Dictionary:
+	return {
+		"slotId": slot_id,
+		"slotInfo": slot_info.duplicate(true),
+		"data": data.duplicate(true),
+		"version": int(response["version"]),
+		"updatedAt": String(response["updatedAt"]),
 	}
 
 
@@ -805,100 +862,143 @@ func _normalize_sync_response(
 	return normalized
 
 
-func _normalize_profile_response(response: Dictionary, cache_result: bool, require_session_token: bool) -> Dictionary:
-	if typeof(response.get("profileSaveId", null)) != TYPE_STRING or String(response.get("profileSaveId", "")).is_empty():
-		return _error_result(ERROR_SERVER, "Persistly profile response is missing profileSaveId.")
-	if require_session_token and (typeof(response.get("profileSessionToken", null)) != TYPE_STRING or String(response.get("profileSessionToken", "")).is_empty()):
-		return _error_result(ERROR_SERVER, "Persistly profile response is missing profileSessionToken.")
-	if typeof(response.get("profile", null)) != TYPE_DICTIONARY:
-		return _error_result(ERROR_SERVER, "Persistly profile response is missing profile.")
+func _normalize_account_sync_response(response: Dictionary, cache_result: bool, label: String, account_id: String, request_body: Dictionary) -> Dictionary:
+	var status = String(response.get("status", ""))
+	if status != "accepted" and status != "conflict":
+		return _error_result(ERROR_SERVER, label + " returned an unexpected status.")
 
-	var profile := _normalize_save(response["profile"], cache_result)
-	if profile.has("error"):
-		return profile
-	var profile_state = profile.get("state", {})
-	if typeof(profile_state) != TYPE_DICTIONARY:
-		return _error_result(ERROR_SERVER, "Persistly profile state must be a dictionary.")
-	if profile_state.get("schema", "") != "persistly.profile.v1":
-		return _error_result(ERROR_SERVER, "Persistly profile state has an unsupported schema.")
-	if typeof(profile_state.get("accountData", null)) != TYPE_DICTIONARY:
-		return _error_result(ERROR_SERVER, "Persistly profile state is missing accountData.")
-	if typeof(profile_state.get("characterSlots", null)) != TYPE_ARRAY:
-		return _error_result(ERROR_SERVER, "Persistly profile state is missing characterSlots.")
+	var normalized := _copy_response_extras(response, [])
+	if response.has("account"):
+		var account := _normalize_account_object(response["account"], cache_result)
+		if account.has("error"):
+			return account
+		normalized["account"] = account
+	elif status == "accepted":
+		if not response.has("version") or not response.has("updatedAt"):
+			return _error_result(ERROR_SERVER, label + " accepted response is missing version or updatedAt.")
+		normalized["account"] = _normalize_account_object(_synthesize_account_from_sync(account_id, request_body, response), cache_result)
+	else:
+		return _error_result(ERROR_SERVER, label + " conflict response is missing account.")
+
+	normalized["status"] = status
+	normalized["version"] = int(response.get("version", normalized["account"].get("version", 0)))
+	normalized["updatedAt"] = String(response.get("updatedAt", normalized["account"].get("updatedAt", "")))
+	normalized["historyRetained"] = bool(response.get("historyRetained", false))
+	return normalized
+
+
+func _normalize_slot_sync_response(response: Dictionary, cache_result: bool, label: String, slot_id: String, slot_info: Dictionary, data: Dictionary) -> Dictionary:
+	var status = String(response.get("status", ""))
+	if status != "accepted" and status != "conflict":
+		return _error_result(ERROR_SERVER, label + " returned an unexpected status.")
+
+	var normalized := _copy_response_extras(response, [])
+	if response.has("slot"):
+		var slot := _normalize_slot_object(response["slot"], cache_result)
+		if slot.has("error"):
+			return slot
+		normalized["slot"] = slot
+	elif status == "accepted":
+		if not response.has("version") or not response.has("updatedAt"):
+			return _error_result(ERROR_SERVER, label + " accepted response is missing version or updatedAt.")
+		normalized["slot"] = _normalize_slot_object(_synthesize_slot_from_sync(slot_id, slot_info, data, response), cache_result)
+	else:
+		return _error_result(ERROR_SERVER, label + " conflict response is missing slot.")
+
+	normalized["status"] = status
+	normalized["version"] = int(response.get("version", normalized["slot"].get("version", 0)))
+	normalized["updatedAt"] = String(response.get("updatedAt", normalized["slot"].get("updatedAt", "")))
+	normalized["historyRetained"] = bool(response.get("historyRetained", false))
+	return normalized
+
+
+func _normalize_account_response(response: Dictionary, cache_result: bool, require_session_token: bool) -> Dictionary:
+	var account_payload = response.get("account", response)
+	if typeof(account_payload) != TYPE_DICTIONARY:
+		return _error_result(ERROR_SERVER, "Persistly account response is missing account.")
+	var account := _normalize_account_object(account_payload, cache_result)
+	if account.has("error"):
+		return account
+
+	var response_account_id := String(response.get("accountId", account.get("accountId", "")))
+	if response_account_id.is_empty():
+		return _error_result(ERROR_SERVER, "Persistly account response is missing accountId.")
+	if require_session_token and (typeof(response.get("accountSessionToken", null)) != TYPE_STRING or String(response.get("accountSessionToken", "")).is_empty()):
+		return _error_result(ERROR_SERVER, "Persistly account response is missing accountSessionToken.")
 
 	var normalized: Dictionary = {
-		"profileSaveId": String(response["profileSaveId"]),
-		"profile": profile,
+		"accountId": response_account_id,
+		"account": account,
 	}
-	if response.has("profileSessionToken"):
-		normalized["profileSessionToken"] = String(response["profileSessionToken"])
+	if response.has("accountSessionToken"):
+		normalized["accountSessionToken"] = String(response["accountSessionToken"])
 	if response.has("syncPolicy"):
 		if typeof(response["syncPolicy"]) != TYPE_DICTIONARY:
-			return _error_result(ERROR_SERVER, "Persistly profile response syncPolicy must be a dictionary.")
+			return _error_result(ERROR_SERVER, "Persistly account response syncPolicy must be a dictionary.")
 		normalized["syncPolicy"] = (response["syncPolicy"] as Dictionary).duplicate(true)
-	if response.has("character"):
-		if typeof(response["character"]) != TYPE_DICTIONARY:
-			return _error_result(ERROR_SERVER, "Persistly profile response character must be a dictionary.")
-		var character := _normalize_save(response["character"], cache_result)
-		if character.has("error"):
-			return character
-		normalized["character"] = character
+	if response.has("slot"):
+		if typeof(response["slot"]) != TYPE_DICTIONARY:
+			return _error_result(ERROR_SERVER, "Persistly account response slot must be a dictionary.")
+		var slot := _normalize_slot_object(response["slot"], cache_result)
+		if slot.has("error"):
+			return slot
+		normalized["slot"] = slot
 	return normalized
 
 
-func _normalize_delete_profile_response(response: Dictionary, profile_save_id: String) -> Dictionary:
-	if typeof(response.get("profileSaveId", null)) != TYPE_STRING or String(response.get("profileSaveId", "")).is_empty():
-		return _error_result(ERROR_SERVER, "Persistly delete profile response is missing profileSaveId.")
+func _normalize_delete_account_response(response: Dictionary, account_id: String) -> Dictionary:
+	if typeof(response.get("accountId", null)) != TYPE_STRING or String(response.get("accountId", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly delete account response is missing accountId.")
 	if typeof(response.get("deletedAt", null)) != TYPE_STRING or String(response.get("deletedAt", "")).is_empty():
-		return _error_result(ERROR_SERVER, "Persistly delete profile response is missing deletedAt.")
-	var deleted_character_count_type := typeof(response.get("deletedCharacterCount", null))
-	if not (deleted_character_count_type == TYPE_INT or deleted_character_count_type == TYPE_FLOAT):
-		return _error_result(ERROR_SERVER, "Persistly delete profile response is missing deletedCharacterCount.")
+		return _error_result(ERROR_SERVER, "Persistly delete account response is missing deletedAt.")
+	var deleted_slot_count_type := typeof(response.get("deletedSlotCount", null))
+	if not (deleted_slot_count_type == TYPE_INT or deleted_slot_count_type == TYPE_FLOAT):
+		return _error_result(ERROR_SERVER, "Persistly delete account response is missing deletedSlotCount.")
 	if typeof(response.get("alreadyDeleted", null)) != TYPE_BOOL:
-		return _error_result(ERROR_SERVER, "Persistly delete profile response is missing alreadyDeleted.")
+		return _error_result(ERROR_SERVER, "Persistly delete account response is missing alreadyDeleted.")
 	if typeof(response.get("cleanupQueued", null)) != TYPE_BOOL:
-		return _error_result(ERROR_SERVER, "Persistly delete profile response is missing cleanupQueued.")
+		return _error_result(ERROR_SERVER, "Persistly delete account response is missing cleanupQueued.")
 
 	var normalized := {
-		"profileSaveId": String(response["profileSaveId"]),
+		"accountId": String(response["accountId"]),
 		"deletedAt": String(response["deletedAt"]),
-		"deletedCharacterCount": int(response["deletedCharacterCount"]),
+		"deletedSlotCount": int(response["deletedSlotCount"]),
 		"alreadyDeleted": bool(response["alreadyDeleted"]),
 		"cleanupQueued": bool(response["cleanupQueued"]),
 	}
-	clear_cached_save(profile_save_id)
+	clear_cached_save(account_id)
 	return normalized
 
 
-func _normalize_delete_profile_character_response(response: Dictionary, character_save_id: String) -> Dictionary:
-	if typeof(response.get("profileSaveId", null)) != TYPE_STRING or String(response.get("profileSaveId", "")).is_empty():
-		return _error_result(ERROR_SERVER, "Persistly delete profile character response is missing profileSaveId.")
-	if typeof(response.get("characterSaveId", null)) != TYPE_STRING or String(response.get("characterSaveId", "")).is_empty():
-		return _error_result(ERROR_SERVER, "Persistly delete profile character response is missing characterSaveId.")
+func _normalize_delete_account_slot_response(response: Dictionary, slot_id: String) -> Dictionary:
+	if typeof(response.get("accountId", null)) != TYPE_STRING or String(response.get("accountId", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly delete account slot response is missing accountId.")
+	if typeof(response.get("slotId", null)) != TYPE_STRING or String(response.get("slotId", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly delete account slot response is missing slotId.")
 	if typeof(response.get("deletedAt", null)) != TYPE_STRING or String(response.get("deletedAt", "")).is_empty():
-		return _error_result(ERROR_SERVER, "Persistly delete profile character response is missing deletedAt.")
+		return _error_result(ERROR_SERVER, "Persistly delete account slot response is missing deletedAt.")
 	if typeof(response.get("alreadyDeleted", null)) != TYPE_BOOL:
-		return _error_result(ERROR_SERVER, "Persistly delete profile character response is missing alreadyDeleted.")
+		return _error_result(ERROR_SERVER, "Persistly delete account slot response is missing alreadyDeleted.")
 	if typeof(response.get("cleanupQueued", null)) != TYPE_BOOL:
-		return _error_result(ERROR_SERVER, "Persistly delete profile character response is missing cleanupQueued.")
+		return _error_result(ERROR_SERVER, "Persistly delete account slot response is missing cleanupQueued.")
 
 	var normalized: Dictionary = {
-		"profileSaveId": String(response["profileSaveId"]),
-		"characterSaveId": String(response["characterSaveId"]),
+		"accountId": String(response["accountId"]),
+		"slotId": String(response["slotId"]),
 		"deletedAt": String(response["deletedAt"]),
 		"alreadyDeleted": bool(response["alreadyDeleted"]),
 		"cleanupQueued": bool(response["cleanupQueued"]),
 	}
-	if typeof(response.get("slotKey", null)) == TYPE_STRING:
-		normalized["slotKey"] = String(response["slotKey"])
-	clear_cached_save(character_save_id)
-	if response.has("profile"):
-		if typeof(response["profile"]) != TYPE_DICTIONARY:
-			return _error_result(ERROR_SERVER, "Persistly delete profile character response profile must be a dictionary.")
-		var profile := _normalize_save(response["profile"], true)
-		if profile.has("error"):
-			return profile
-		normalized["profile"] = profile
+	if typeof(response.get("slotId", null)) == TYPE_STRING:
+		normalized["slotId"] = String(response["slotId"])
+	clear_cached_save(slot_id)
+	if response.has("account"):
+		if typeof(response["account"]) != TYPE_DICTIONARY:
+			return _error_result(ERROR_SERVER, "Persistly delete account slot response account must be a dictionary.")
+		var account := _normalize_account_object(response["account"], true)
+		if account.has("error"):
+			return account
+		normalized["account"] = account
 	return normalized
 
 
@@ -969,7 +1069,7 @@ func _error_code_for_status(status_code: int) -> String:
 		409:
 			return ERROR_CONFLICT
 		410:
-			return ERROR_PROFILE_DELETED
+			return ERROR_ACCOUNT_DELETED
 		402:
 			return ERROR_MONTHLY_QUOTA_EXCEEDED
 		413:
@@ -1050,15 +1150,15 @@ class PersistlyMemoryAutosaveDraftStore:
 	var _drafts: Dictionary = {}
 
 	func store_draft(draft: Dictionary) -> void:
-		_drafts[String(draft.get("characterSaveId", ""))] = draft.duplicate(true)
+		_drafts[String(draft.get("slotId", ""))] = draft.duplicate(true)
 
-	func load_draft(character_save_id: String) -> Dictionary:
-		if not _drafts.has(character_save_id):
+	func load_draft(slot_id: String) -> Dictionary:
+		if not _drafts.has(slot_id):
 			return {}
-		return (_drafts[character_save_id] as Dictionary).duplicate(true)
+		return (_drafts[slot_id] as Dictionary).duplicate(true)
 
-	func clear_draft(character_save_id: String) -> void:
-		_drafts.erase(character_save_id)
+	func clear_draft(slot_id: String) -> void:
+		_drafts.erase(slot_id)
 
 
 class PersistlyFileAutosaveDraftStore:
@@ -1069,16 +1169,16 @@ class PersistlyFileAutosaveDraftStore:
 		DirAccess.make_dir_recursive_absolute(root_path)
 
 	func store_draft(draft: Dictionary) -> void:
-		var character_save_id := String(draft.get("characterSaveId", ""))
-		if character_save_id.is_empty():
+		var slot_id := String(draft.get("slotId", ""))
+		if slot_id.is_empty():
 			return
-		var file := FileAccess.open(_draft_path(character_save_id), FileAccess.WRITE)
+		var file := FileAccess.open(_draft_path(slot_id), FileAccess.WRITE)
 		if file != null:
 			file.store_string(JSON.stringify(draft))
 			file.close()
 
-	func load_draft(character_save_id: String) -> Dictionary:
-		var path := _draft_path(character_save_id)
+	func load_draft(slot_id: String) -> Dictionary:
+		var path := _draft_path(slot_id)
 		if not FileAccess.file_exists(path):
 			return {}
 		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
@@ -1086,13 +1186,13 @@ class PersistlyFileAutosaveDraftStore:
 			return {}
 		return (parsed as Dictionary).duplicate(true)
 
-	func clear_draft(character_save_id: String) -> void:
-		var path := _draft_path(character_save_id)
+	func clear_draft(slot_id: String) -> void:
+		var path := _draft_path(slot_id)
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)
 
-	func _draft_path(character_save_id: String) -> String:
-		return root_path.path_join(character_save_id.uri_encode() + ".json")
+	func _draft_path(slot_id: String) -> String:
+		return root_path.path_join(slot_id.uri_encode() + ".json")
 
 
 class PersistlyAutosaveManager:
@@ -1104,11 +1204,11 @@ class PersistlyAutosaveManager:
 		draft_store = draft_store_value
 		sync_policy = sync_policy_value.duplicate(true)
 
-	func record_local_change(profile_save_id: String, profile_session_token: String, character_save_id: String, metadata: Dictionary, state: Dictionary, base_version: Variant = null) -> Dictionary:
+	func record_local_change(account_id: String, account_session_token: String, slot_id: String, metadata: Dictionary, state: Dictionary, base_version: Variant = null) -> Dictionary:
 		var draft := {
-			"profileSaveId": profile_save_id,
-			"profileSessionToken": profile_session_token,
-			"characterSaveId": character_save_id,
+			"accountId": account_id,
+			"accountSessionToken": account_session_token,
+			"slotId": slot_id,
 			"metadata": metadata.duplicate(true),
 			"state": state.duplicate(true),
 			"baseVersion": base_version,
@@ -1117,17 +1217,17 @@ class PersistlyAutosaveManager:
 		draft_store.store_draft(draft)
 		return draft
 
-	func should_sync_remote(character_save_id: String, force: bool = false) -> bool:
-		if draft_store.load_draft(character_save_id).is_empty():
+	func should_sync_remote(slot_id: String, force: bool = false) -> bool:
+		if draft_store.load_draft(slot_id).is_empty():
 			return false
-		if not _last_remote_sync_msec.has(character_save_id):
+		if not _last_remote_sync_msec.has(slot_id):
 			return true
 
-		var elapsed_seconds := float(Time.get_ticks_msec() - int(_last_remote_sync_msec[character_save_id])) / 1000.0
+		var elapsed_seconds := float(Time.get_ticks_msec() - int(_last_remote_sync_msec[slot_id])) / 1000.0
 		if force:
 			return elapsed_seconds >= float(sync_policy.get("forceSyncCooldownSeconds", 10))
 		return elapsed_seconds >= float(sync_policy.get("minRemoteSyncIntervalSeconds", 60))
 
-	func mark_remote_synced(character_save_id: String) -> void:
-		_last_remote_sync_msec[character_save_id] = Time.get_ticks_msec()
-		draft_store.clear_draft(character_save_id)
+	func mark_remote_synced(slot_id: String) -> void:
+		_last_remote_sync_msec[slot_id] = Time.get_ticks_msec()
+		draft_store.clear_draft(slot_id)

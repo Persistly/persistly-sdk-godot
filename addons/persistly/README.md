@@ -53,6 +53,7 @@ The account-first contract bundle `persistly-contract-v0.4.0` is included under 
 ## Docs
 
 - Main docs: https://docs.persistly.app/sdk/godot
+- Templates: https://docs.persistly.app/templates/godot
 - Runtime/API reference: https://docs.persistly.app/runtime-api
 - Repository: https://github.com/Persistly/persistly-sdk-godot
 

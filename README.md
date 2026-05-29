@@ -59,6 +59,12 @@ var attached := persistly.attach_account("acc_01HXYZ", "pst_account_session")
 
 Use `clear_local_account()` before switching players on the same device. It only wipes local SDK state. Use `delete_account()` for permanent remote erasure.
 
+## Templates
+
+- `templates/one-save` for idle, casual, and one-save games.
+- `templates/multi-slot` for manual saves, campaigns, and slot select screens.
+- `templates/account-slots` for games with sign-in or cross-device restore.
+
 ## Runtime Surface
 
 Facade methods:

@@ -1,7 +1,6 @@
 extends SceneTree
 
 const ACCOUNT_FIRST_BUNDLE := "persistly-contract-v0.4.0"
-const FALLBACK_BUNDLE := "persistly-contract-v0.3.0"
 
 
 func _initialize() -> void:
@@ -9,10 +8,9 @@ func _initialize() -> void:
 	var bundle_root := "res://contracts/" + ACCOUNT_FIRST_BUNDLE
 	var manifest_path := bundle_root.path_join("manifest.json")
 	if not FileAccess.file_exists(manifest_path):
-		print("Persistly account-first contract bundle " + ACCOUNT_FIRST_BUNDLE + " is not present; validating pinned fallback " + FALLBACK_BUNDLE + ".")
-		bundle_name = FALLBACK_BUNDLE
-		bundle_root = "res://contracts/" + FALLBACK_BUNDLE
-		manifest_path = bundle_root.path_join("manifest.json")
+		push_error("Persistly account-first contract bundle " + ACCOUNT_FIRST_BUNDLE + " is not present.")
+		quit(1)
+		return
 
 	var manifest := _read_json_file(manifest_path)
 	if manifest.is_empty():

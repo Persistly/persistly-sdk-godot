@@ -11,9 +11,9 @@
 
 ## 0.9.1
 
-- Adds the pre-release profile/character runtime flow, runtime config, and local autosave draft helpers.
+- Adds the pre-release account/slot runtime flow, runtime config, and local autosave draft helpers.
 - Keeps raw save create/load/sync available as advanced APIs.
-- Documents pre-release profile session and character save semantics through the pinned contract bundle.
+- Documents pre-release account session and slot save semantics through the pinned contract bundle.
 
 ## 0.1.0
 

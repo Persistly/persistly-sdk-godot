@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Godot SDK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.2.2
+          use-dotnet: false
+
+      - name: Validate contract bundle
+        run: godot --headless --path . --script scripts/validate_contract.gd
+
+      - name: Validate raw client
+        run: godot --headless --path . --script scripts/validate_client.gd
+
+      - name: Validate game saves facade
+        run: godot --headless --path . --script scripts/validate_game_saves.gd
+
+      - name: Validate Last Beacon sample
+        run: |
+          godot --headless --path . --script scripts/validate_last_beacon_state.gd
+          godot --headless --path . --script scripts/validate_last_beacon_store.gd
+          godot --headless --path . --script scripts/validate_last_beacon_scene.gd
+

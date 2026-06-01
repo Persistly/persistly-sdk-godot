@@ -1,5 +1,11 @@
 # Persistly Godot SDK
 
+[![CI](https://github.com/Persistly/persistly-sdk-godot/actions/workflows/ci.yml/badge.svg)](https://github.com/Persistly/persistly-sdk-godot/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/Persistly/persistly-sdk-godot?sort=semver)](https://github.com/Persistly/persistly-sdk-godot/releases)
+[![Godot](https://img.shields.io/badge/Godot-4.2%2B-478cbf)](https://godotengine.org/)
+[![license](https://img.shields.io/github/license/Persistly/persistly-sdk-godot.svg)](LICENSE)
+[![docs](https://img.shields.io/badge/docs-persistly.app-6467f2)](https://docs.persistly.app/sdk/godot)
+
 Godot runtime SDK for Persistly account-first cloud saves, local-first slot data, account sessions, and explicit sync.
 
 ## Install

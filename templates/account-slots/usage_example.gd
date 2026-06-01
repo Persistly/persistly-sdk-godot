@@ -27,10 +27,29 @@ func second_device_restore() -> void:
 	saves.attach_account_session(restore_payload)
 
 
+func first_device_transfer() -> Dictionary:
+	var created := saves.create_transfer_code("Desktop")
+	if created.has("error"):
+		return created
+
+	show_transfer_code_to_player(String(created.get("transferCode", "")))
+	return created
+
+
+func second_device_transfer(transfer_code: String) -> void:
+	saves.attach_with_transfer_code(transfer_code, "Laptop")
+
+
 func send_account_session_to_backend(payload: Dictionary) -> void:
 	# Replace with your authenticated backend request. Do not log the token.
 	var account_id := String(payload.get("accountId", ""))
 	if account_id.is_empty():
+		return
+
+
+func show_transfer_code_to_player(transfer_code: String) -> void:
+	# Render this in your UI. Do not print or persist the code.
+	if transfer_code.is_empty():
 		return
 
 

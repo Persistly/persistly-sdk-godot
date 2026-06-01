@@ -18,6 +18,18 @@ func attach_account_session(payload: Dictionary) -> Dictionary:
 	)
 
 
+func create_transfer_code(device_label: String = "") -> Dictionary:
+	return persistly.create_transfer_code({
+		"deviceLabel": device_label,
+	})
+
+
+func attach_with_transfer_code(transfer_code: String, device_label: String = "") -> Dictionary:
+	return persistly.attach_with_transfer_code(transfer_code, {
+		"deviceLabel": device_label,
+	})
+
+
 func export_account_session_for_backend() -> Dictionary:
 	var ensured := persistly.ensure_account()
 	if ensured.has("error"):

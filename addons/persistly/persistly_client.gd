@@ -257,6 +257,63 @@ func sync_account_data(account_id: String, account_session_token: String, payloa
 	return _normalize_account_sync_response(response, true, "sync_account_data", account_id, request_body)
 
 
+func create_transfer_code(account_id: String, account_session_token: String, options: Dictionary = {}) -> Dictionary:
+	var preflight := _validate_account_session_configuration("create_transfer_code", account_id, account_session_token)
+	if not preflight.is_empty():
+		return preflight
+	if typeof(options) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "create_transfer_code options must be a dictionary.")
+
+	var request_body: Dictionary = {}
+	if options.has("deviceLabel") or options.has("device_label"):
+		var device_label = options.get("deviceLabel", options.get("device_label", null))
+		if not (typeof(device_label) == TYPE_STRING or device_label == null):
+			return _error_result(ERROR_INVALID_REQUEST, "create_transfer_code deviceLabel must be a string or null.")
+		if typeof(device_label) == TYPE_STRING and not String(device_label).strip_edges().is_empty():
+			request_body["deviceLabel"] = String(device_label).strip_edges()
+	if options.has("ttlSeconds") or options.has("ttl_seconds"):
+		var ttl_seconds = options.get("ttlSeconds", options.get("ttl_seconds", null))
+		if not (typeof(ttl_seconds) == TYPE_INT or typeof(ttl_seconds) == TYPE_FLOAT):
+			return _error_result(ERROR_INVALID_REQUEST, "create_transfer_code ttlSeconds must be a number.")
+		request_body["ttlSeconds"] = int(ttl_seconds)
+
+	var response := _request_json(
+		"POST",
+		"/api/v1/accounts/" + _url_encode(account_id) + "/transfer-codes",
+		request_body,
+		account_session_token)
+	if response.has("error"):
+		return response
+
+	return _normalize_transfer_code_response(response)
+
+
+func consume_transfer_code(transfer_code: String, options: Dictionary = {}) -> Dictionary:
+	var preflight := _validate_runtime_configuration("consume_transfer_code")
+	if not preflight.is_empty():
+		return preflight
+	if transfer_code.strip_edges().is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "consume_transfer_code requires a non-empty transfer_code.")
+	if typeof(options) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "consume_transfer_code options must be a dictionary.")
+
+	var request_body: Dictionary = {
+		"transferCode": transfer_code.strip_edges(),
+	}
+	if options.has("deviceLabel") or options.has("device_label"):
+		var device_label = options.get("deviceLabel", options.get("device_label", null))
+		if not (typeof(device_label) == TYPE_STRING or device_label == null):
+			return _error_result(ERROR_INVALID_REQUEST, "consume_transfer_code deviceLabel must be a string or null.")
+		if typeof(device_label) == TYPE_STRING and not String(device_label).strip_edges().is_empty():
+			request_body["deviceLabel"] = String(device_label).strip_edges()
+
+	var response := _request_json("POST", "/api/v1/account-transfer-codes/consume", request_body)
+	if response.has("error"):
+		return response
+
+	return _normalize_account_response(response, true, true)
+
+
 func create_account_slot(account_id: String, account_session_token: String, payload: Dictionary) -> Dictionary:
 	var preflight := _validate_account_session_configuration("create_account_slot", account_id, account_session_token)
 	if not preflight.is_empty():
@@ -552,19 +609,43 @@ func _request_headers(account_session_token: String) -> PackedStringArray:
 
 
 func _record_request(method: String, path: String, body: Variant, account_session_token: String, headers: PackedStringArray) -> void:
-	var recorded_body = body
-	if typeof(body) == TYPE_DICTIONARY or typeof(body) == TYPE_ARRAY:
-		recorded_body = body.duplicate(true)
+	var recorded_body = _redact_sensitive_value(body)
 	var recorded_headers: Array = []
 	for header in headers:
-		recorded_headers.append(String(header))
+		recorded_headers.append(_redact_sensitive_header(String(header)))
 	_recorded_requests.append({
 		"method": method.to_upper(),
 		"path": path,
 		"body": recorded_body,
-		"accountSessionToken": account_session_token,
+		"accountSessionToken": "[redacted]" if not account_session_token.is_empty() else "",
 		"headers": recorded_headers,
 	})
+
+
+func _redact_sensitive_header(header: String) -> String:
+	if header.begins_with("Authorization: Bearer "):
+		return "Authorization: Bearer [redacted]"
+	if header.begins_with("X-Persistly-Account-Session:"):
+		return "X-Persistly-Account-Session: [redacted]"
+	return header
+
+
+func _redact_sensitive_value(value: Variant) -> Variant:
+	if typeof(value) == TYPE_DICTIONARY:
+		var redacted := {}
+		for key in (value as Dictionary).keys():
+			var key_name := String(key)
+			if key_name == "transferCode" or key_name == "accountSessionToken" or key_name == "account_session_token":
+				redacted[key] = "[redacted]"
+			else:
+				redacted[key] = _redact_sensitive_value((value as Dictionary)[key])
+		return redacted
+	if typeof(value) == TYPE_ARRAY:
+		var redacted_array: Array = []
+		for item in (value as Array):
+			redacted_array.append(_redact_sensitive_value(item))
+		return redacted_array
+	return value
 
 
 func _parse_api_origin() -> Dictionary:
@@ -706,6 +787,21 @@ func _normalize_slot_envelope(response: Dictionary, cache_result: bool) -> Dicti
 	var normalized := _copy_response_extras(response, ["slot"])
 	normalized["slot"] = slot
 	return normalized
+
+
+func _normalize_transfer_code_response(response: Dictionary) -> Dictionary:
+	if typeof(response.get("transferCode", null)) != TYPE_STRING or String(response.get("transferCode", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly transfer-code response is missing transferCode.")
+	if typeof(response.get("expiresAt", null)) != TYPE_STRING or String(response.get("expiresAt", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly transfer-code response is missing expiresAt.")
+	var expires_in_type := typeof(response.get("expiresInSeconds", null))
+	if not (expires_in_type == TYPE_INT or expires_in_type == TYPE_FLOAT):
+		return _error_result(ERROR_SERVER, "Persistly transfer-code response is missing expiresInSeconds.")
+	return {
+		"transferCode": String(response["transferCode"]),
+		"expiresAt": String(response["expiresAt"]),
+		"expiresInSeconds": int(response["expiresInSeconds"]),
+	}
 
 
 func _normalize_account_object(account: Dictionary, cache_result: bool) -> Dictionary:

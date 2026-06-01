@@ -51,6 +51,7 @@ func _initialize() -> void:
 	_check_local_slot_flow(game_saves_script)
 	_check_first_sync_creates_account_and_slot(game_saves_script)
 	_check_account_data_sync(game_saves_script)
+	_check_transfer_code_facade(game_saves_script)
 	_check_clear_and_delete_boundaries(game_saves_script)
 	_check_reserved_slot_info_rejected(game_saves_script)
 	_finish()
@@ -68,6 +69,8 @@ func _check_account_first_facade_surface(game_saves_script: Script) -> void:
 	for method_name in [
 		"create_account",
 		"attach_account",
+		"create_transfer_code",
+		"attach_with_transfer_code",
 		"get_account_session",
 		"force_sync_account",
 		"sync_due_account",
@@ -203,6 +206,61 @@ func _check_account_data_sync(game_saves_script: Script) -> void:
 	var request: Dictionary = persistly._client.get_recorded_requests()[0]
 	_expect_equal(request.get("path", ""), "/api/v1/accounts/acc_test/data/sync", "account sync route")
 	_expect_has_account_session_header(request)
+
+
+func _check_transfer_code_facade(game_saves_script: Script) -> void:
+	var source: Object = game_saves_script.new()
+	source.configure({
+		"runtime_key": "ps_test_replace_me",
+		"accountId": "acc_test",
+		"accountSessionToken": "pst_account_session",
+		"localAccountKey": "validation-transfer-source",
+		"storage_path": _storage_path("transfer_source"),
+	})
+	source._client.register_fixture_response("POST", "/api/v1/accounts/acc_test/transfer-codes", 200, {
+		"transferCode": "P7K2D-M9Q4R",
+		"expiresAt": "2026-06-01T12:10:00Z",
+		"expiresInSeconds": 600,
+	})
+	var created_code: Dictionary = source.create_transfer_code({
+		"deviceLabel": "Steam Deck",
+		"ttlSeconds": 600,
+	})
+	_expect_equal(created_code.get("transferCode", ""), "P7K2D-M9Q4R", "facade create_transfer_code")
+	_expect_has_account_session_header(source._client.get_recorded_requests()[0])
+
+	var target: Object = game_saves_script.new()
+	target.configure({
+		"runtime_key": "ps_test_replace_me",
+		"localAccountKey": "validation-transfer-target",
+		"storage_path": _storage_path("transfer_target"),
+	})
+	target._client.register_fixture_response("POST", "/api/v1/account-transfer-codes/consume", 200, {
+		"accountId": "acc_test",
+		"accountSessionToken": "pst_new_session",
+		"account": _account_with_slot("autosave"),
+		"syncPolicy": SYNC_POLICY,
+	})
+	var attached: Dictionary = target.attach_with_transfer_code("P7K2D-M9Q4R", {
+		"deviceLabel": "Laptop",
+	})
+	_expect_equal(attached.get("status", ""), "synced", "attach_with_transfer_code status")
+	_expect_equal(target.get_account_session({"includeToken": true}).get("accountId", ""), "acc_test", "attach_with_transfer_code accountId")
+	_expect_equal(target.get_account_session({"includeToken": true}).get("accountSessionToken", ""), "pst_new_session", "attach_with_transfer_code token")
+	_expect_equal(target.slot_info("autosave").get("slotInfo", {}).get("level", 0), 5, "attach_with_transfer_code slot ref")
+	var recorded := JSON.stringify(target._client.get_recorded_requests())
+	if recorded.find("P7K2D-M9Q4R") >= 0 or recorded.find("pst_new_session") >= 0:
+		_fail("attach_with_transfer_code should not record raw transfer codes or account session tokens.")
+
+	var non_empty: Object = game_saves_script.new()
+	non_empty.configure({
+		"runtime_key": "ps_test_replace_me",
+		"localAccountKey": "validation-transfer-non-empty",
+		"storage_path": _storage_path("transfer_non_empty"),
+	})
+	non_empty.save_slot("autosave", {"level": 1})
+	var rejected: Dictionary = non_empty.attach_with_transfer_code("P7K2D-M9Q4R")
+	_expect_equal(rejected.get("error", {}).get("code", ""), "invalid_request", "attach_with_transfer_code rejects non-empty local state")
 
 
 func _check_clear_and_delete_boundaries(game_saves_script: Script) -> void:

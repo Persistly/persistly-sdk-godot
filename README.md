@@ -57,6 +57,21 @@ Attach an existing Persistly account into empty local state:
 var attached := persistly.attach_account("acc_01HXYZ", "pst_account_session")
 ```
 
+Create a short-lived transfer code on the device that already has the account session, then consume it on an empty second device:
+
+```gdscript
+var code := persistly.create_transfer_code({
+	"deviceLabel": "Steam Deck",
+})
+
+var attached := other_device_persistly.attach_with_transfer_code(
+	code["transferCode"],
+	{"deviceLabel": "Laptop"}
+)
+```
+
+Transfer codes are short-lived and single-use. Show the code to the player, but do not log it or treat it as a password.
+
 Use `clear_local_account()` before switching players on the same device. It only wipes local SDK state. Use `delete_account()` for permanent remote erasure.
 
 ## Templates
@@ -72,6 +87,8 @@ Facade methods:
 - `configure`
 - `create_account`
 - `attach_account`
+- `create_transfer_code`
+- `attach_with_transfer_code`
 - `get_account_session`
 - `save_account_data`
 - `patch_account_data`
@@ -103,6 +120,8 @@ Low-level client account methods:
 - `create_account`
 - `load_account`
 - `sync_account_data`
+- `create_transfer_code`
+- `consume_transfer_code`
 - `create_account_slot`
 - `load_account_slot`
 - `sync_account_slot`

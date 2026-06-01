@@ -51,6 +51,7 @@ func _initialize() -> void:
 	_check_versions(client_script)
 	_check_account_first_surface(client, client_script)
 	_check_account_routes(client)
+	_check_transfer_code_routes(client)
 	_check_slot_routes(client)
 	_check_runtime_config(client)
 	_check_error_mapping(client, client_script)
@@ -71,6 +72,8 @@ func _check_account_first_surface(client: Object, _client_script: GDScript) -> v
 		"create_account",
 		"load_account",
 		"sync_account_data",
+		"create_transfer_code",
+		"consume_transfer_code",
 		"create_account_slot",
 		"load_account_slot",
 		"sync_account_slot",
@@ -139,6 +142,31 @@ func _check_account_routes(client: Object) -> void:
 	_expect_request(requests[3], "DELETE", "/api/v1/accounts/acc_test", true)
 	if str(requests[0].get("body", {})).find("_persistly") >= 0:
 		_fail("create_account request should not expose _persistly metadata.")
+	client.clear_recorded_requests()
+
+
+func _check_transfer_code_routes(client: Object) -> void:
+	var created_code: Dictionary = client.create_transfer_code("acc_test", "pst_account_session", {
+		"deviceLabel": "Steam Deck",
+		"ttlSeconds": 600,
+	})
+	_expect_equal(created_code.get("transferCode", ""), "P7K2D-M9Q4R", "create_transfer_code transferCode")
+	_expect_equal(created_code.get("expiresInSeconds", 0), 600, "create_transfer_code expiresInSeconds")
+
+	var consumed: Dictionary = client.consume_transfer_code("P7K2D-M9Q4R", {
+		"deviceLabel": "Laptop",
+	})
+	_expect_equal(consumed.get("accountId", ""), "acc_test", "consume_transfer_code accountId")
+	_expect_equal(consumed.get("accountSessionToken", ""), "pst_new_session", "consume_transfer_code accountSessionToken")
+	_expect_dictionary(consumed.get("account", {}).get("accountData", {}), ACCOUNT["accountData"], "consume_transfer_code accountData")
+
+	var requests: Array = client.get_recorded_requests()
+	_expect_request(requests[0], "POST", "/api/v1/accounts/acc_test/transfer-codes", true)
+	_expect_request(requests[1], "POST", "/api/v1/account-transfer-codes/consume", false)
+	if JSON.stringify(requests).find("P7K2D-M9Q4R") >= 0:
+		_fail("Recorded transfer-code requests should redact raw transfer codes.")
+	if JSON.stringify(requests).find("pst_account_session") >= 0 or JSON.stringify(requests).find("pst_new_session") >= 0:
+		_fail("Recorded transfer-code requests should not expose account session tokens.")
 	client.clear_recorded_requests()
 
 
@@ -224,6 +252,17 @@ func _seed_fixture_responses(client: Object) -> void:
 		"deletedSlotCount": 1,
 		"alreadyDeleted": false,
 		"cleanupQueued": true,
+	})
+	client.register_fixture_response("POST", "/api/v1/accounts/acc_test/transfer-codes", 200, {
+		"transferCode": "P7K2D-M9Q4R",
+		"expiresAt": "2026-06-01T12:10:00Z",
+		"expiresInSeconds": 600,
+	})
+	client.register_fixture_response("POST", "/api/v1/account-transfer-codes/consume", 200, {
+		"accountId": "acc_test",
+		"accountSessionToken": "pst_new_session",
+		"account": ACCOUNT,
+		"syncPolicy": SYNC_POLICY,
 	})
 	client.register_fixture_response("POST", "/api/v1/accounts/acc_test/slots", 201, {
 		"accountId": "acc_test",

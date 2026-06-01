@@ -113,6 +113,38 @@ func attach_account(account_id_value: String, account_session_token_value: Strin
 	return _restore_account(false)
 
 
+func create_transfer_code(options: Dictionary = {}) -> Dictionary:
+	var preflight := _validate_configured("create_transfer_code")
+	if not preflight.is_empty():
+		return preflight
+	if account_id.is_empty() or account_session_token.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "create_transfer_code requires an existing account session.")
+	return _client.create_transfer_code(account_id, account_session_token, options)
+
+
+func attach_with_transfer_code(transfer_code: String, options: Dictionary = {}) -> Dictionary:
+	var preflight := _validate_configured("attach_with_transfer_code")
+	if not preflight.is_empty():
+		return preflight
+	if transfer_code.strip_edges().is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "attach_with_transfer_code requires a non-empty transfer_code.")
+	var local_state_error := _ensure_no_existing_local_account_state(
+		"attach_with_transfer_code requires empty local account state. Call clear_local_account before attaching a different account."
+	)
+	if not local_state_error.is_empty():
+		return local_state_error
+
+	var consumed: Dictionary = _client.consume_transfer_code(transfer_code, options)
+	if consumed.has("error"):
+		return _map_remote_error(consumed, PersistlyGameSaveTarget.ACCOUNT)
+
+	_apply_account_response(consumed, true)
+	_dirty_account = false
+	_account_last_synced_msec = Time.get_ticks_msec()
+	_persist_account()
+	return _account_result(PersistlyGameSaveStatus.SYNCED, false)
+
+
 func ensure_account() -> Dictionary:
 	var preflight := _validate_configured("ensure_account")
 	if not preflight.is_empty():

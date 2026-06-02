@@ -37,7 +37,7 @@ Use `create_account()` for explicit account-first flows, or `attach_account(acco
 
 Use `create_transfer_code()` on a device that already has a local account session, and `attach_with_transfer_code(code)` on an empty second device for short-lived anonymous save transfer. Transfer codes are single-use and should be shown to the player without logging them.
 
-Use `get_account_data()` for account-wide state. `patch_account_data()` shallow-merges top-level keys and deletes a top-level key when its patch value is `null`.
+Use `get_account_data()` for account-wide data. `patch_account_data()` shallow-merges top-level keys and deletes a top-level key when its patch value is `null`.
 
 Use `delete_slot(slotId)` for slot erasure. Use `delete_account()` to clear local-only state or remotely delete the synced account and then wipe local session plus slots.
 

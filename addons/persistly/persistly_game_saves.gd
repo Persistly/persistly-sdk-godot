@@ -265,9 +265,9 @@ func save_slot(slot_id: String, data: Dictionary, options: Dictionary = {}) -> D
 	var slot_info := options.get("slotInfo", options.get("slot_info", options))
 	if typeof(slot_info) != TYPE_DICTIONARY:
 		return _error_result(ERROR_INVALID_REQUEST, "save_slot slotInfo must be a dictionary.")
-	var metadata_error := _validate_developer_metadata(slot_info, "save_slot")
-	if not metadata_error.is_empty():
-		return metadata_error
+	var slot_info_error := _validate_developer_slot_info(slot_info, "save_slot")
+	if not slot_info_error.is_empty():
+		return slot_info_error
 
 	var previous := _slots.get(slot_id, {})
 	var was_archived := bool(previous.get("archived", false))
@@ -1177,9 +1177,9 @@ func _validate_slot_id(slot_id: String, action: String) -> Dictionary:
 	return {}
 
 
-func _validate_developer_metadata(metadata: Dictionary, action: String) -> Dictionary:
-	if metadata.has("_persistly"):
-		return _error_result(ERROR_INVALID_REQUEST, action + " metadata must not contain reserved _persistly fields.")
+func _validate_developer_slot_info(slot_info: Dictionary, action: String) -> Dictionary:
+	if slot_info.has("_persistly"):
+		return _error_result(ERROR_INVALID_REQUEST, action + " slotInfo must not contain reserved _persistly fields.")
 	return {}
 
 

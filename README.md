@@ -121,7 +121,7 @@ Facade methods:
 - `overwrite_cloud_version`
 - `keep_local_for_later`
 
-Low-level client account methods:
+Low-level client account methods use the same public facade terms: `accountData`, `slotInfo`, and `data`.
 
 - `create_account`
 - `load_account`
@@ -134,7 +134,6 @@ Low-level client account methods:
 - `archive_account_slot`
 - `delete_account_slot`
 - `delete_account`
-- advanced raw `create_save`, `load_save`, and `sync_save`
 - `get_runtime_config`
 
 Account and slot routes send `X-Persistly-Account-Session`. Release packages do not expose legacy compatibility aliases.

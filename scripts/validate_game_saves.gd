@@ -126,14 +126,21 @@ func _check_local_slot_flow(game_saves_script: Script) -> void:
 	_expect_equal(saved.get("slotId", ""), "autosave", "save_slot slotId")
 	_expect_dictionary(saved.get("data", {}), SLOT["data"], "save_slot data")
 	_expect_dictionary(saved.get("slotInfo", {}), SLOT["slotInfo"], "save_slot slotInfo")
+	_expect_facade_slot_terms(saved, "save_slot")
 
 	var loaded: Dictionary = persistly.load_slot("autosave")
 	_expect_equal(loaded.get("status", ""), "local_found", "load_slot status")
 	_expect_dictionary(loaded.get("data", {}), SLOT["data"], "load_slot data")
+	_expect_facade_slot_terms(loaded, "load_slot")
+	var loaded_data: Dictionary = persistly.load_data()
+	_expect_dictionary(loaded_data.get("data", {}), SLOT["data"], "load_data data")
+	_expect_facade_slot_terms(loaded_data, "load_data")
 
 	var listed: Array = persistly.list_slot_data()
 	if listed.size() != 1 or listed[0].get("slotId", "") != "autosave":
 		_fail("list_slot_data should return active local slots.")
+	else:
+		_expect_facade_slot_terms(listed[0], "list_slot_data")
 
 	var info: Dictionary = persistly.slot_info("autosave")
 	_expect_dictionary(info.get("slotInfo", {}), SLOT["slotInfo"], "slot_info slotInfo")
@@ -169,7 +176,8 @@ func _check_first_sync_creates_account_and_slot(game_saves_script: Script) -> vo
 	var request: Dictionary = persistly._client.get_recorded_requests()[0]
 	_expect_equal(request.get("path", ""), "/api/v1/accounts", "first sync route")
 	if str(request.get("body", {})).find("_persistly") >= 0:
-		_fail("Facade account create request should not expose _persistly metadata.")
+		_fail("Facade account create request should not expose _persistly slotInfo.")
+	_expect_facade_request_terms(request.get("body", {}), "force_sync_data")
 
 
 func _check_account_data_sync(game_saves_script: Script) -> void:
@@ -310,6 +318,9 @@ func _check_reserved_slot_info_rejected(game_saves_script: Script) -> void:
 		},
 	})
 	_expect_equal(result.get("status", ""), "invalid_request", "save_slot rejects reserved slotInfo")
+	var message := String(result.get("error", {}).get("message", ""))
+	if message.find("slotInfo") < 0 or message.find("metadata") >= 0:
+		_fail("Reserved slotInfo error should use slotInfo wording, got: " + message)
 
 
 func _account_with_slot(slot_id: String) -> Dictionary:
@@ -336,6 +347,23 @@ func _expect_has_account_session_header(request: Dictionary) -> void:
 		if String(header).begins_with("X-Persistly-Account-Session:"):
 			return
 	_fail("Request should include X-Persistly-Account-Session.")
+
+
+func _expect_facade_request_terms(body: Variant, label: String) -> void:
+	var body_text := JSON.stringify(body)
+	for forbidden in ["metadata", "state", "saveId", "_persistly"]:
+		if body_text.find(forbidden) >= 0:
+			_fail(label + " request should not contain raw " + forbidden + " fields.")
+
+
+func _expect_facade_slot_terms(slot_result: Dictionary, label: String) -> void:
+	if not slot_result.has("data"):
+		_fail(label + " result should expose playable save content as data.")
+	if not slot_result.has("slotInfo"):
+		_fail(label + " result should expose slot preview values as slotInfo.")
+	for forbidden in ["metadata", "state", "saveId"]:
+		if slot_result.has(forbidden):
+			_fail(label + " result should not expose raw " + forbidden + " fields.")
 
 
 func _storage_path(name: String) -> String:

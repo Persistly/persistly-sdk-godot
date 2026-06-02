@@ -42,93 +42,6 @@ func configure_runtime_key(runtime_key_value: String, timeout_seconds_value: flo
 	timeout_seconds = max(timeout_seconds_value, 1.0)
 
 
-func create_save(payload: Dictionary) -> Dictionary:
-	var preflight := _validate_runtime_configuration("create_save")
-	if not preflight.is_empty():
-		return preflight
-
-	if typeof(payload.get("state", null)) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, "create_save requires a dictionary state payload.")
-
-	var metadata := payload.get("metadata", {})
-	if typeof(metadata) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, "create_save metadata must be a dictionary when provided.")
-
-	var request_body: Dictionary = {
-		"state": payload["state"],
-		"metadata": metadata,
-	}
-	var payload_error := _validate_payload_sizes(metadata, payload["state"])
-	if not payload_error.is_empty():
-		return payload_error
-
-	if payload.has("playerRef"):
-		var player_ref = payload.get("playerRef")
-		if not (typeof(player_ref) == TYPE_STRING or player_ref == null):
-			return _error_result(ERROR_INVALID_REQUEST, "playerRef must be a string or null.")
-		request_body["playerRef"] = player_ref
-
-	var response := _request_json("POST", "/api/v1/saves", request_body)
-	if response.has("error"):
-		return response
-
-	return _normalize_save_envelope(response, true)
-
-
-func load_save(save_id: String) -> Dictionary:
-	var preflight := _validate_runtime_configuration("load_save")
-	if not preflight.is_empty():
-		return preflight
-
-	if save_id.is_empty():
-		return _error_result(ERROR_INVALID_REQUEST, "load_save requires a non-empty save_id.")
-
-	var response := _request_json("GET", "/api/v1/saves/" + _url_encode(save_id))
-	if response.has("error"):
-		return response
-
-	return _normalize_save_envelope(response, true)
-
-
-func sync_save(save_id: String, payload: Dictionary) -> Dictionary:
-	var preflight := _validate_runtime_configuration("sync_save")
-	if not preflight.is_empty():
-		return preflight
-
-	if save_id.is_empty():
-		return _error_result(ERROR_INVALID_REQUEST, "sync_save requires a non-empty save_id.")
-
-	if typeof(payload.get("state", null)) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, "sync_save requires a dictionary state payload.")
-
-	var metadata := payload.get("metadata", {})
-	if typeof(metadata) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, "sync_save metadata must be a dictionary when provided.")
-
-	var base_version = payload.get("baseVersion", null)
-	if base_version == null and _save_cache.has(save_id):
-		base_version = int(_save_cache[save_id].get("version", 0))
-	if base_version == null:
-		return _error_result(ERROR_INVALID_REQUEST, "sync_save requires baseVersion unless the save is already cached.")
-	if typeof(base_version) != TYPE_INT:
-		return _error_result(ERROR_INVALID_REQUEST, "sync_save baseVersion must be an integer.")
-
-	var request_body := {
-		"baseVersion": base_version,
-		"metadata": metadata,
-		"state": payload["state"],
-	}
-	var payload_error := _validate_payload_sizes(metadata, payload["state"])
-	if not payload_error.is_empty():
-		return payload_error
-
-	var response := _request_json("POST", "/api/v1/saves/" + _url_encode(save_id) + "/sync", request_body)
-	if response.has("error"):
-		return response
-
-	return _normalize_sync_response(response, true, "sync_save", save_id, metadata, payload["state"])
-
-
 func create_account(payload: Dictionary = {}) -> Dictionary:
 	var preflight := _validate_runtime_configuration("create_account")
 	if not preflight.is_empty():
@@ -138,7 +51,7 @@ func create_account(payload: Dictionary = {}) -> Dictionary:
 	if typeof(account_data) != TYPE_DICTIONARY:
 		return _error_result(ERROR_INVALID_REQUEST, "create_account accountData must be a dictionary.")
 
-	var account_payload_error := _validate_payload_sizes({}, account_data)
+	var account_payload_error := _validate_facade_payload_sizes({}, account_data, "slotInfo", "accountData")
 	if not account_payload_error.is_empty():
 		return account_payload_error
 
@@ -234,7 +147,7 @@ func sync_account_data(account_id: String, account_session_token: String, payloa
 		var account_data = payload["accountData"]
 		if typeof(account_data) != TYPE_DICTIONARY:
 			return _error_result(ERROR_INVALID_REQUEST, "sync_account_data accountData must be a dictionary.")
-		var payload_error := _validate_payload_sizes({}, account_data)
+		var payload_error := _validate_facade_payload_sizes({}, account_data, "slotInfo", "accountData")
 		if not payload_error.is_empty():
 			return payload_error
 		request_body["accountData"] = account_data
@@ -242,7 +155,7 @@ func sync_account_data(account_id: String, account_session_token: String, payloa
 		var account_data_patch = payload["accountDataPatch"]
 		if typeof(account_data_patch) != TYPE_DICTIONARY:
 			return _error_result(ERROR_INVALID_REQUEST, "sync_account_data accountDataPatch must be a dictionary.")
-		var patch_error := _validate_payload_sizes({}, account_data_patch)
+		var patch_error := _validate_facade_payload_sizes({}, account_data_patch, "slotInfo", "accountDataPatch")
 		if not patch_error.is_empty():
 			return patch_error
 		request_body["accountDataPatch"] = account_data_patch
@@ -376,13 +289,19 @@ func sync_account_slot(account_id: String, account_session_token: String, slot_i
 		return preflight
 	if slot_id.is_empty():
 		return _error_result(ERROR_INVALID_REQUEST, "sync_account_slot requires a non-empty slot_id.")
+	var raw_alias_error := _reject_raw_slot_aliases(payload, "sync_account_slot")
+	if not raw_alias_error.is_empty():
+		return raw_alias_error
 
-	if typeof(payload.get("data", payload.get("state", null))) != TYPE_DICTIONARY:
+	if typeof(payload.get("data", null)) != TYPE_DICTIONARY:
 		return _error_result(ERROR_INVALID_REQUEST, "sync_account_slot requires a dictionary data payload.")
 
-	var slot_info := payload.get("slotInfo", payload.get("metadata", {}))
+	var slot_info := payload.get("slotInfo", {})
 	if typeof(slot_info) != TYPE_DICTIONARY:
 		return _error_result(ERROR_INVALID_REQUEST, "sync_account_slot slotInfo must be a dictionary when provided.")
+	var slot_info_error := _validate_slot_info(slot_info, "sync_account_slot")
+	if not slot_info_error.is_empty():
+		return slot_info_error
 
 	var base_version = payload.get("baseVersion", null)
 	if base_version == null and _save_cache.has(slot_id):
@@ -392,8 +311,8 @@ func sync_account_slot(account_id: String, account_session_token: String, slot_i
 	if typeof(base_version) != TYPE_INT:
 		return _error_result(ERROR_INVALID_REQUEST, "sync_account_slot baseVersion must be an integer.")
 
-	var data: Dictionary = payload.get("data", payload.get("state", {}))
-	var payload_error := _validate_payload_sizes(slot_info, data)
+	var data: Dictionary = payload.get("data", {})
+	var payload_error := _validate_facade_payload_sizes(slot_info, data, "slotInfo", "data")
 	if not payload_error.is_empty():
 		return payload_error
 
@@ -449,14 +368,8 @@ func get_runtime_config(game_config_version: int = -1) -> Dictionary:
 	return response
 
 
-func get_cached_save(save_id: String) -> Dictionary:
-	if _save_cache.has(save_id):
-		return _duplicate_dictionary(_save_cache[save_id])
-	return {}
-
-
-func clear_cached_save(save_id: String) -> void:
-	_save_cache.erase(save_id)
+func _clear_cached_record(record_id: String) -> void:
+	_save_cache.erase(record_id)
 
 
 func register_fixture_response(method: String, path: String, status_code: int, body: Variant) -> void:
@@ -490,15 +403,21 @@ func _normalize_slot_request(payload: Dictionary, action: String) -> Dictionary:
 		return _error_result(ERROR_INVALID_REQUEST, action + " slotId must match ^[A-Za-z0-9_.-]{1,64}$.", {
 			"slotId": slot_id,
 		})
+	var raw_alias_error := _reject_raw_slot_aliases(payload, action)
+	if not raw_alias_error.is_empty():
+		return raw_alias_error
 
-	var slot_info := payload.get("slotInfo", payload.get("metadata", {}))
-	var data = payload.get("data", payload.get("state", null))
+	var slot_info := payload.get("slotInfo", {})
+	var data = payload.get("data", null)
 	if typeof(slot_info) != TYPE_DICTIONARY:
 		return _error_result(ERROR_INVALID_REQUEST, action + " slotInfo must be a dictionary.")
 	if typeof(data) != TYPE_DICTIONARY:
 		return _error_result(ERROR_INVALID_REQUEST, action + " requires a dictionary data payload.")
+	var slot_info_error := _validate_slot_info(slot_info, action)
+	if not slot_info_error.is_empty():
+		return slot_info_error
 
-	var payload_error := _validate_payload_sizes(slot_info, data)
+	var payload_error := _validate_facade_payload_sizes(slot_info, data, "slotInfo", "data")
 	if not payload_error.is_empty():
 		return payload_error
 	return {
@@ -508,8 +427,14 @@ func _normalize_slot_request(payload: Dictionary, action: String) -> Dictionary:
 	}
 
 
-func _validate_slot_metadata(metadata: Dictionary, action: String) -> Dictionary:
-	if metadata.has("_persistly"):
+func _reject_raw_slot_aliases(payload: Dictionary, action: String) -> Dictionary:
+	if payload.has("metadata") or payload.has("state"):
+		return _error_result(ERROR_INVALID_REQUEST, action + " uses slotInfo and data. Raw metadata/state are not supported by the release SDK.")
+	return {}
+
+
+func _validate_slot_info(slot_info: Dictionary, action: String) -> Dictionary:
+	if slot_info.has("_persistly"):
 		return _error_result(ERROR_INVALID_REQUEST, action + " slotInfo must not contain reserved _persistly fields.")
 	return {}
 
@@ -762,21 +687,6 @@ func _parse_transport_response(status_code: int, body_text: String) -> Dictionar
 	})
 
 
-func _normalize_save_envelope(response: Dictionary, cache_result: bool) -> Dictionary:
-	if not response.has("save"):
-		return _error_result(ERROR_SERVER, "Persistly response is missing the save payload.")
-
-	var save = response["save"]
-	if typeof(save) != TYPE_DICTIONARY:
-		return _error_result(ERROR_SERVER, "Persistly save payload must be a dictionary.")
-	var normalized_save := _normalize_save(save, cache_result)
-	if normalized_save.has("error"):
-		return normalized_save
-	var normalized := _copy_response_extras(response, ["save"])
-	normalized["save"] = normalized_save
-	return normalized
-
-
 func _normalize_slot_envelope(response: Dictionary, cache_result: bool) -> Dictionary:
 	var slot_value = response.get("slot", response)
 	if typeof(slot_value) != TYPE_DICTIONARY:
@@ -840,29 +750,6 @@ func _normalize_slot_object(slot: Dictionary, cache_result: bool) -> Dictionary:
 	return normalized
 
 
-func _account_state_from_sync(account_id: String, request_body: Dictionary) -> Dictionary:
-	var cached: Dictionary = _save_cache.get(account_id, {})
-	var cached_state: Dictionary = cached.get("state", {}) if typeof(cached.get("state", {})) == TYPE_DICTIONARY else {}
-	var account_data: Dictionary = {}
-	if request_body.has("accountData"):
-		account_data = (request_body["accountData"] as Dictionary).duplicate(true)
-	elif request_body.has("accountDataPatch"):
-		account_data = (cached_state.get("accountData", {}) as Dictionary).duplicate(true) if typeof(cached_state.get("accountData", {})) == TYPE_DICTIONARY else {}
-		for key in (request_body["accountDataPatch"] as Dictionary).keys():
-			if request_body["accountDataPatch"][key] == null:
-				account_data.erase(key)
-			else:
-				account_data[key] = request_body["accountDataPatch"][key]
-	else:
-		account_data = (cached_state.get("accountData", {}) as Dictionary).duplicate(true) if typeof(cached_state.get("accountData", {})) == TYPE_DICTIONARY else {}
-	var slot_slots: Array = (cached_state.get("slots", []) as Array).duplicate(true) if typeof(cached_state.get("slots", [])) == TYPE_ARRAY else []
-	return {
-		"schema": "persistly.account.v1",
-		"accountData": account_data,
-		"slots": slot_slots,
-	}
-
-
 func _synthesize_account_from_sync(account_id: String, request_body: Dictionary, response: Dictionary) -> Dictionary:
 	var cached: Dictionary = _save_cache.get(account_id, {})
 	var account_data: Dictionary = cached.get("accountData", {}).duplicate(true) if typeof(cached.get("accountData", {})) == TYPE_DICTIONARY else {}
@@ -891,71 +778,6 @@ func _synthesize_slot_from_sync(slot_id: String, slot_info: Dictionary, data: Di
 		"version": int(response["version"]),
 		"updatedAt": String(response["updatedAt"]),
 	}
-
-
-func _synthesize_save_from_sync(save_id: String, request_metadata: Variant, request_state: Dictionary, response: Dictionary) -> Dictionary:
-	var cached: Dictionary = _save_cache.get(save_id, {})
-	var metadata: Dictionary = {}
-	if request_metadata == "__persistly_missing__":
-		metadata = cached.get("metadata", {}).duplicate(true) if typeof(cached.get("metadata", {})) == TYPE_DICTIONARY else {}
-	elif request_metadata == null:
-		metadata = {}
-	elif typeof(request_metadata) == TYPE_DICTIONARY:
-		metadata = (request_metadata as Dictionary).duplicate(true)
-	var created_at := String(cached.get("createdAt", "1970-01-01T00:00:00Z"))
-	return {
-		"saveId": save_id,
-		"playerRef": cached.get("playerRef", null),
-		"metadata": metadata,
-		"state": request_state.duplicate(true),
-		"version": int(response["version"]),
-		"createdAt": created_at,
-		"updatedAt": String(response["updatedAt"]),
-	}
-
-
-func _normalize_sync_response(
-	response: Dictionary,
-	cache_result: bool,
-	label: String,
-	save_id: String = "",
-	request_metadata: Variant = null,
-	request_state: Dictionary = {},
-) -> Dictionary:
-	var status = String(response.get("status", ""))
-	if status != "accepted" and status != "conflict":
-		return _error_result(ERROR_SERVER, label + " returned an unexpected status.")
-
-	var normalized := _copy_response_extras(response, [])
-
-	if status == "conflict":
-		normalized = _normalize_save_envelope(response, cache_result)
-		if normalized.has("error"):
-			return normalized
-		var details = normalized.get("details", {})
-		if typeof(details) != TYPE_DICTIONARY or String(details.get("reason", "")) != "base_version_mismatch":
-			return _error_result(ERROR_SERVER, label + " conflict response is missing a valid reason.")
-	else:
-		if not response.has("version") and not response.has("save"):
-			return _error_result(ERROR_SERVER, label + " accepted response is missing version.")
-		if not response.has("updatedAt") and not response.has("save"):
-			return _error_result(ERROR_SERVER, label + " accepted response is missing updatedAt.")
-		if response.has("save"):
-			normalized = _normalize_save_envelope(response, cache_result)
-			if normalized.has("error"):
-				return normalized
-		else:
-			var synthesized := _synthesize_save_from_sync(save_id, request_metadata, request_state, response)
-			var normalized_save := _normalize_save(synthesized, cache_result)
-			if normalized_save.has("error"):
-				return normalized_save
-			normalized["save"] = normalized_save
-		normalized["version"] = int(response.get("version", normalized["save"].get("version", 0)))
-		normalized["updatedAt"] = String(response.get("updatedAt", normalized["save"].get("updatedAt", "")))
-		normalized["historyRetained"] = bool(response.get("historyRetained", false))
-
-	normalized["status"] = status
-	return normalized
 
 
 func _normalize_account_sync_response(response: Dictionary, cache_result: bool, label: String, account_id: String, request_body: Dictionary) -> Dictionary:
@@ -1062,7 +884,7 @@ func _normalize_delete_account_response(response: Dictionary, account_id: String
 		"alreadyDeleted": bool(response["alreadyDeleted"]),
 		"cleanupQueued": bool(response["cleanupQueued"]),
 	}
-	clear_cached_save(account_id)
+	_clear_cached_record(account_id)
 	return normalized
 
 
@@ -1087,7 +909,7 @@ func _normalize_delete_account_slot_response(response: Dictionary, slot_id: Stri
 	}
 	if typeof(response.get("slotId", null)) == TYPE_STRING:
 		normalized["slotId"] = String(response["slotId"])
-	clear_cached_save(slot_id)
+	_clear_cached_record(slot_id)
 	if response.has("account"):
 		if typeof(response["account"]) != TYPE_DICTIONARY:
 			return _error_result(ERROR_SERVER, "Persistly delete account slot response account must be a dictionary.")
@@ -1096,40 +918,6 @@ func _normalize_delete_account_slot_response(response: Dictionary, slot_id: Stri
 			return account
 		normalized["account"] = account
 	return normalized
-
-
-func _normalize_save(save: Dictionary, cache_result: bool) -> Dictionary:
-	var required_keys := [
-		"saveId",
-		"playerRef",
-		"metadata",
-		"state",
-		"version",
-		"createdAt",
-		"updatedAt",
-	]
-	for key in required_keys:
-		if not save.has(key):
-			return _error_result(ERROR_SERVER, "Persistly save payload is missing " + key + ".")
-
-	if typeof(save["saveId"]) != TYPE_STRING or String(save["saveId"]).is_empty():
-		return _error_result(ERROR_SERVER, "Persistly save payload has an invalid saveId.")
-	if not (typeof(save["playerRef"]) == TYPE_STRING or save["playerRef"] == null):
-		return _error_result(ERROR_SERVER, "Persistly save payload has an invalid playerRef.")
-	if typeof(save["metadata"]) != TYPE_DICTIONARY:
-		return _error_result(ERROR_SERVER, "Persistly save payload metadata must be a dictionary.")
-	if typeof(save["state"]) != TYPE_DICTIONARY:
-		return _error_result(ERROR_SERVER, "Persistly save payload state must be a dictionary.")
-	if not (typeof(save["version"]) == TYPE_INT or typeof(save["version"]) == TYPE_FLOAT):
-		return _error_result(ERROR_SERVER, "Persistly save payload version must be an integer.")
-	if typeof(save["createdAt"]) != TYPE_STRING or typeof(save["updatedAt"]) != TYPE_STRING:
-		return _error_result(ERROR_SERVER, "Persistly save payload timestamps must be strings.")
-
-	var normalized_save := _duplicate_dictionary(save)
-	normalized_save["version"] = int(save["version"])
-	if cache_result:
-		_save_cache[String(save["saveId"])] = normalized_save.duplicate(true)
-	return normalized_save
 
 
 func _copy_response_extras(response: Dictionary, excluded_keys: Array[String]) -> Dictionary:
@@ -1176,18 +964,18 @@ func _error_code_for_status(status_code: int) -> String:
 			return ERROR_SERVER
 
 
-func _validate_payload_sizes(metadata: Dictionary, state: Dictionary) -> Dictionary:
-	var metadata_bytes := JSON.stringify(metadata).to_utf8_buffer().size()
-	if metadata_bytes > METADATA_MAX_BYTES:
-		return _error_result(ERROR_PAYLOAD_TOO_LARGE, "Metadata exceeds the maximum allowed size.", {
-			"field": "metadata",
+func _validate_facade_payload_sizes(slot_info: Dictionary, data: Dictionary, slot_info_field: String, data_field: String) -> Dictionary:
+	var slot_info_bytes := JSON.stringify(slot_info).to_utf8_buffer().size()
+	if slot_info_bytes > METADATA_MAX_BYTES:
+		return _error_result(ERROR_PAYLOAD_TOO_LARGE, slot_info_field + " exceeds the maximum allowed size.", {
+			"field": slot_info_field,
 			"maxBytes": METADATA_MAX_BYTES,
 		})
 
-	var state_bytes := JSON.stringify(state).to_utf8_buffer().size()
-	if state_bytes > STATE_MAX_BYTES:
-		return _error_result(ERROR_PAYLOAD_TOO_LARGE, "State exceeds the maximum allowed size.", {
-			"field": "state",
+	var data_bytes := JSON.stringify(data).to_utf8_buffer().size()
+	if data_bytes > STATE_MAX_BYTES:
+		return _error_result(ERROR_PAYLOAD_TOO_LARGE, data_field + " exceeds the maximum allowed size.", {
+			"field": data_field,
 			"maxBytes": STATE_MAX_BYTES,
 		})
 
@@ -1300,13 +1088,13 @@ class PersistlyAutosaveManager:
 		draft_store = draft_store_value
 		sync_policy = sync_policy_value.duplicate(true)
 
-	func record_local_change(account_id: String, account_session_token: String, slot_id: String, metadata: Dictionary, state: Dictionary, base_version: Variant = null) -> Dictionary:
+	func record_local_change(account_id: String, account_session_token: String, slot_id: String, slot_info: Dictionary, data: Dictionary, base_version: Variant = null) -> Dictionary:
 		var draft := {
 			"accountId": account_id,
 			"accountSessionToken": account_session_token,
 			"slotId": slot_id,
-			"metadata": metadata.duplicate(true),
-			"state": state.duplicate(true),
+			"slotInfo": slot_info.duplicate(true),
+			"data": data.duplicate(true),
 			"baseVersion": base_version,
 			"updatedAtMsec": Time.get_ticks_msec(),
 		}

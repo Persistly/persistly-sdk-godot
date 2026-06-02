@@ -50,9 +50,10 @@ func _initialize() -> void:
 	_seed_fixture_responses(client)
 	_check_versions(client_script)
 	_check_account_first_surface(client, client_script)
+	_check_no_raw_save_transport(client, CLIENT_SCRIPT)
 	_check_account_routes(client)
 	_check_transfer_code_routes(client)
-	_check_slot_routes(client)
+	_check_slot_routes(client, client_script)
 	_check_runtime_config(client)
 	_check_error_mapping(client, client_script)
 	_finish()
@@ -84,6 +85,9 @@ func _check_account_first_surface(client: Object, _client_script: GDScript) -> v
 		if not client.has_method(method_name):
 			_fail("PersistlyClient should expose account-first method " + method_name + ".")
 	for legacy_method_name in [
+		"create_save",
+		"load_save",
+		"sync_save",
 		"create_profile",
 		"load_profile",
 		"sync_profile_account_data",
@@ -96,6 +100,17 @@ func _check_account_first_surface(client: Object, _client_script: GDScript) -> v
 	]:
 		if client.has_method(legacy_method_name):
 			_fail("PersistlyClient should not expose release profile compatibility method " + legacy_method_name + ".")
+
+
+func _check_no_raw_save_transport(client: Object, client_script_path: String) -> void:
+	for raw_method_name in ["create_save", "load_save", "sync_save"]:
+		if client.has_method(raw_method_name):
+			_fail("PersistlyClient should not expose raw save method " + raw_method_name + ".")
+
+	var source_text := FileAccess.get_file_as_string(client_script_path)
+	for forbidden_route in ["/api/v1/saves", "/api/v1/saves/", "/sync_save"]:
+		if source_text.find(forbidden_route) >= 0:
+			_fail("PersistlyClient release source should not contain raw save transport string " + forbidden_route + ".")
 
 
 func _check_account_routes(client: Object) -> void:
@@ -141,7 +156,9 @@ func _check_account_routes(client: Object) -> void:
 	_expect_request(requests[2], "POST", "/api/v1/accounts/acc_test/data/sync", true)
 	_expect_request(requests[3], "DELETE", "/api/v1/accounts/acc_test", true)
 	if str(requests[0].get("body", {})).find("_persistly") >= 0:
-		_fail("create_account request should not expose _persistly metadata.")
+		_fail("create_account request should not expose _persistly slotInfo.")
+	_expect_facade_body_terms(requests[0].get("body", {}), "create_account")
+	_expect_facade_body_terms(requests[2].get("body", {}), "sync_account_data")
 	client.clear_recorded_requests()
 
 
@@ -170,7 +187,7 @@ func _check_transfer_code_routes(client: Object) -> void:
 	client.clear_recorded_requests()
 
 
-func _check_slot_routes(client: Object) -> void:
+func _check_slot_routes(client: Object, client_script: GDScript) -> void:
 	var created: Dictionary = client.create_account_slot("acc_test", "pst_account_session", {
 		"slotId": "manual-1",
 		"slotInfo": {
@@ -210,6 +227,25 @@ func _check_slot_routes(client: Object) -> void:
 	_expect_request(requests[2], "POST", "/api/v1/accounts/acc_test/slots/manual-1/sync", true)
 	_expect_request(requests[3], "POST", "/api/v1/accounts/acc_test/slots/manual-1/archive", true)
 	_expect_request(requests[4], "DELETE", "/api/v1/accounts/acc_test/slots/manual-1", true)
+	_expect_facade_body_terms(requests[0].get("body", {}), "create_account_slot")
+	_expect_facade_body_terms(requests[2].get("body", {}), "sync_account_slot")
+
+	var raw_create: Dictionary = client.create_account_slot("acc_test", "pst_account_session", {
+		"slotId": "raw-create",
+		"metadata": {},
+		"state": {
+			"level": 1,
+		},
+	})
+	_expect_error_code(raw_create, client_script.ERROR_INVALID_REQUEST, "create_account_slot rejects raw state/metadata aliases")
+	var raw_sync: Dictionary = client.sync_account_slot("acc_test", "pst_account_session", "raw-sync", {
+		"baseVersion": 1,
+		"metadata": {},
+		"state": {
+			"level": 1,
+		},
+	})
+	_expect_error_code(raw_sync, client_script.ERROR_INVALID_REQUEST, "sync_account_slot rejects raw state/metadata aliases")
 	client.clear_recorded_requests()
 
 
@@ -372,6 +408,13 @@ func _expect_request(request: Dictionary, method: String, path: String, should_h
 		_fail(method + " " + path + " should not send an account session header.")
 	if has_profile_header:
 		_fail(method + " " + path + " should not send X-Persistly-Profile-Session.")
+
+
+func _expect_facade_body_terms(body: Variant, label: String) -> void:
+	var body_text := JSON.stringify(body)
+	for forbidden in ["metadata", "state", "saveId", "_persistly"]:
+		if body_text.find(forbidden) >= 0:
+			_fail(label + " request should not contain raw " + forbidden + " fields.")
 
 
 func _expect_error_code(result: Dictionary, expected: String, label: String) -> void:

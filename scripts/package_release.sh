@@ -11,6 +11,7 @@ rm -rf "$STAGE_DIR" "$ZIP_PATH"
 mkdir -p "$STAGE_DIR"
 
 cp -R "$ROOT_DIR/addons" "$STAGE_DIR/addons"
+cp -R "$ROOT_DIR/assets" "$STAGE_DIR/assets"
 cp -R "$ROOT_DIR/contracts" "$STAGE_DIR/contracts"
 cp "$ROOT_DIR/README.md" "$STAGE_DIR/README.md"
 cp "$ROOT_DIR/CHANGELOG.md" "$STAGE_DIR/CHANGELOG.md"

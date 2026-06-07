@@ -231,7 +231,7 @@ func consume_transfer_code(transfer_code: String, options: Dictionary = {}) -> D
 	return _normalize_account_response(response, true, true)
 
 
-func create_auth_session(input: Dictionary, current_account_session_token: String = "") -> Dictionary:
+func create_auth_session(input: Dictionary, current_account_session_token: String = "", current_account_id: String = "") -> Dictionary:
 	var preflight := _validate_runtime_configuration("create_auth_session")
 	if not preflight.is_empty():
 		return preflight
@@ -243,17 +243,21 @@ func create_auth_session(input: Dictionary, current_account_session_token: Strin
 		"POST",
 		"/api/v1/accounts/auth/session",
 		auth_request,
-		current_account_session_token)
+		current_account_session_token,
+		"",
+		current_account_id)
 	if response.has("error"):
 		return response
 
 	return _normalize_auth_session_response(response)
 
 
-func list_linked_providers(current_account_session_token: String) -> Dictionary:
+func list_linked_providers(current_account_id: String, current_account_session_token: String) -> Dictionary:
 	var preflight := _validate_runtime_configuration("list_linked_providers")
 	if not preflight.is_empty():
 		return preflight
+	if current_account_id.strip_edges().is_empty():
+		return _error_result(ERROR_AUTH_REQUIRED, "list_linked_providers requires an account id.")
 	if current_account_session_token.strip_edges().is_empty():
 		return _error_result(ERROR_AUTH_REQUIRED, "list_linked_providers requires an account session.")
 
@@ -262,7 +266,8 @@ func list_linked_providers(current_account_session_token: String) -> Dictionary:
 		"/api/v1/accounts/auth/providers",
 		null,
 		current_account_session_token.strip_edges(),
-		"providers")
+		"providers",
+		current_account_id.strip_edges())
 	if response.has("error"):
 		return response
 
@@ -543,8 +548,8 @@ func _validate_account_session_configuration(action: String, account_id: String,
 	return {}
 
 
-func _request_json(method: String, path: String, body: Variant = null, account_session_token: String = "", array_response_key: String = "") -> Dictionary:
-	var headers := _request_headers(account_session_token)
+func _request_json(method: String, path: String, body: Variant = null, account_session_token: String = "", array_response_key: String = "", account_id: String = "") -> Dictionary:
+	var headers := _request_headers(account_session_token, account_id)
 	_record_request(method, path, body, account_session_token, headers)
 	var fixture := _pop_fixture_response(method, path)
 	if not fixture.is_empty():
@@ -589,7 +594,7 @@ func _request_json(method: String, path: String, body: Variant = null, account_s
 	return response
 
 
-func _request_headers(account_session_token: String) -> PackedStringArray:
+func _request_headers(account_session_token: String, account_id: String = "") -> PackedStringArray:
 	var headers := PackedStringArray([
 		"Authorization: Bearer " + runtime_key,
 		"Content-Type: application/json",
@@ -601,6 +606,8 @@ func _request_headers(account_session_token: String) -> PackedStringArray:
 	])
 	if not account_session_token.is_empty():
 		headers.append("X-Persistly-Account-Session: " + account_session_token)
+	if not account_id.is_empty():
+		headers.append("X-Persistly-Account-ID: " + account_id)
 	return headers
 
 

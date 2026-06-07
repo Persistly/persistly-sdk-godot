@@ -209,10 +209,10 @@ func _check_auth_routes(client: Object, client_script: GDScript) -> void:
 		"provider": "oidc_jwt",
 		"token": "oidc-token",
 		"deviceLabel": "Laptop",
-	}, "pst_current_session")
+	}, "pst_current_session", "acc_current")
 	_expect_equal(linked.get("wasProviderNewForAccount", false), true, "create_auth_session linked current provider")
 
-	var providers: Dictionary = client.list_linked_providers("pst_auth_session")
+	var providers: Dictionary = client.list_linked_providers("acc_auth", "pst_auth_session")
 	var provider_rows: Array = providers.get("providers", [])
 	if provider_rows.size() != 1:
 		_fail("list_linked_providers should return one provider row.")
@@ -232,13 +232,13 @@ func _check_auth_routes(client: Object, client_script: GDScript) -> void:
 	var conflict: Dictionary = client.create_auth_session({
 		"provider": "google",
 		"token": "conflict-token",
-	}, "pst_current_session")
+	}, "pst_current_session", "acc_current")
 	_expect_error_code(conflict, client_script.ERROR_ACCOUNT_AUTH_CONFLICT, "create_auth_session preserves account_auth_conflict")
 
 	var requests: Array = client.get_recorded_requests()
 	_expect_request(requests[0], "POST", "/api/v1/accounts/auth/session", false)
-	_expect_request(requests[1], "POST", "/api/v1/accounts/auth/session", true)
-	_expect_request(requests[2], "GET", "/api/v1/accounts/auth/providers", true)
+	_expect_request(requests[1], "POST", "/api/v1/accounts/auth/session", true, "acc_current")
+	_expect_request(requests[2], "GET", "/api/v1/accounts/auth/providers", true, "acc_auth")
 	if JSON.stringify(requests).find("google-id-token") >= 0 or JSON.stringify(requests).find("oidc-token") >= 0:
 		_fail("Recorded auth bridge requests should redact provider tokens.")
 	if JSON.stringify(requests).find("pst_auth_session") >= 0 or JSON.stringify(requests).find("pst_current_session") >= 0:
@@ -500,15 +500,18 @@ func _account_with_slot(slot_id: String, archived: Variant = false) -> Dictionar
 	}
 
 
-func _expect_request(request: Dictionary, method: String, path: String, should_have_session: bool) -> void:
+func _expect_request(request: Dictionary, method: String, path: String, should_have_session: bool, expected_account_id: String = "") -> void:
 	_expect_equal(request.get("method", ""), method, method + " " + path + " method")
 	_expect_equal(request.get("path", ""), path, method + " " + path + " path")
 	var headers: Array = request.get("headers", [])
 	var has_account_header := false
+	var account_id_header := ""
 	var has_profile_header := false
 	for header in headers:
 		if String(header).begins_with("X-Persistly-Account-Session:"):
 			has_account_header = true
+		if String(header).begins_with("X-Persistly-Account-ID:"):
+			account_id_header = String(header).replace("X-Persistly-Account-ID:", "").strip_edges()
 		if String(header).begins_with("X-Persistly-Profile-Session:"):
 			has_profile_header = true
 	if should_have_session and not has_account_header:
@@ -517,6 +520,10 @@ func _expect_request(request: Dictionary, method: String, path: String, should_h
 		_fail(method + " " + path + " should not send an account session header.")
 	if has_profile_header:
 		_fail(method + " " + path + " should not send X-Persistly-Profile-Session.")
+	if not expected_account_id.is_empty() and account_id_header != expected_account_id:
+		_fail(method + " " + path + " should send X-Persistly-Account-ID for " + expected_account_id + ".")
+	if expected_account_id.is_empty() and not account_id_header.is_empty():
+		_fail(method + " " + path + " should not send X-Persistly-Account-ID.")
 
 
 func _expect_facade_body_terms(body: Variant, label: String) -> void:

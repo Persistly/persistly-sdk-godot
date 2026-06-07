@@ -364,6 +364,7 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 	_expect_equal(requests[0].get("path", ""), "/api/v1/accounts/auth/session", "sign-in auth route")
 	_expect_equal(requests[1].get("path", ""), "/api/v1/accounts/auth/providers", "list providers route")
 	_expect_equal(requests[2].get("path", ""), "/api/v1/accounts/acc_auth/slots", "signed-in slot create route")
+	_expect_has_account_id_header(requests[1])
 	_expect_has_account_session_header(requests[2])
 	if JSON.stringify(requests).find("google-id-token") >= 0 or JSON.stringify(requests).find("pst_auth_session") >= 0:
 		_fail("Auth facade recorded requests should redact provider tokens and account sessions.")
@@ -406,6 +407,7 @@ func _check_auth_conflict_mapping(game_saves_script: Script) -> void:
 	_expect_equal(conflict.get("error", {}).get("code", ""), "account_auth_conflict", "link_provider conflict error code")
 	_expect_equal(persistly.get_account_session({"includeToken": true}).get("accountId", ""), "acc_local", "link_provider conflict keeps local account")
 	var request: Dictionary = persistly._client.get_recorded_requests()[0]
+	_expect_has_account_id_header(request)
 	_expect_has_account_session_header(request)
 
 
@@ -485,6 +487,14 @@ func _expect_has_account_session_header(request: Dictionary) -> void:
 		if String(header).begins_with("X-Persistly-Account-Session:"):
 			return
 	_fail("Request should include X-Persistly-Account-Session.")
+
+
+func _expect_has_account_id_header(request: Dictionary) -> void:
+	var headers: Array = request.get("headers", [])
+	for header in headers:
+		if String(header).begins_with("X-Persistly-Account-ID:"):
+			return
+	_fail("Request should include X-Persistly-Account-ID.")
 
 
 func _expect_facade_request_terms(body: Variant, label: String) -> void:

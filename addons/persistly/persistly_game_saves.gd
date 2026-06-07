@@ -166,7 +166,7 @@ func sign_in_with_provider(input: Dictionary) -> Dictionary:
 	var preflight := _validate_configured("sign_in_with_provider")
 	if not preflight.is_empty():
 		return preflight
-	return _exchange_provider_session(input, account_session_token)
+	return _exchange_provider_session(input, account_session_token, account_id)
 
 
 func link_provider(input: Dictionary) -> Dictionary:
@@ -175,7 +175,7 @@ func link_provider(input: Dictionary) -> Dictionary:
 		return preflight
 	if account_session_token.is_empty():
 		return _auth_required_result(PersistlyGameSaveTarget.ACCOUNT, "link_provider requires sign-in or an existing account session.")
-	return _exchange_provider_session(input, account_session_token)
+	return _exchange_provider_session(input, account_session_token, account_id)
 
 
 func list_linked_providers() -> Dictionary:
@@ -184,7 +184,7 @@ func list_linked_providers() -> Dictionary:
 		return preflight
 	if account_session_token.is_empty():
 		return _auth_required_result(PersistlyGameSaveTarget.ACCOUNT, "list_linked_providers requires sign-in or an existing account session.")
-	var providers: Dictionary = _client.list_linked_providers(account_session_token)
+	var providers: Dictionary = _client.list_linked_providers(account_id, account_session_token)
 	if providers.has("error"):
 		return _map_remote_error(providers, PersistlyGameSaveTarget.ACCOUNT)
 	return providers
@@ -816,10 +816,10 @@ func _create_account_with_first_slot(slot_id: String, slot: Dictionary) -> Dicti
 	return _finalize_synced_slot(slot_id)
 
 
-func _exchange_provider_session(input: Dictionary, current_session_token: String = "") -> Dictionary:
+func _exchange_provider_session(input: Dictionary, current_session_token: String = "", current_account_id: String = "") -> Dictionary:
 	if typeof(input) != TYPE_DICTIONARY:
 		return _error_result(ERROR_INVALID_REQUEST, "Auth provider input must be a dictionary.")
-	var session: Dictionary = _client.create_auth_session(input, current_session_token)
+	var session: Dictionary = _client.create_auth_session(input, current_session_token, current_account_id)
 	if session.has("error"):
 		return _map_remote_error(session, PersistlyGameSaveTarget.ACCOUNT)
 

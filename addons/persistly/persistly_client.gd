@@ -21,6 +21,10 @@ const ERROR_SLOT_DELETED := "slot_deleted"
 const ERROR_RATE_LIMITED := "rate_limited"
 const ERROR_MONTHLY_QUOTA_EXCEEDED := "monthly_quota_exceeded"
 const ERROR_PAYLOAD_TOO_LARGE := "payload_too_large"
+const ERROR_AUTH_REQUIRED := "auth_required"
+const ERROR_PROVIDER_TOKEN_INVALID := "provider_token_invalid"
+const ERROR_AUTH_PROVIDER_NOT_CONFIGURED := "auth_provider_not_configured"
+const ERROR_ACCOUNT_AUTH_CONFLICT := "account_auth_conflict"
 const ERROR_SERVER := "server_error"
 
 var _api_origin: String = PERSISTLY_API_ORIGIN
@@ -227,6 +231,44 @@ func consume_transfer_code(transfer_code: String, options: Dictionary = {}) -> D
 	return _normalize_account_response(response, true, true)
 
 
+func create_auth_session(input: Dictionary, current_account_session_token: String = "") -> Dictionary:
+	var preflight := _validate_runtime_configuration("create_auth_session")
+	if not preflight.is_empty():
+		return preflight
+	var auth_request := _normalize_auth_session_request(input, "create_auth_session")
+	if auth_request.has("error"):
+		return auth_request
+
+	var response := _request_json(
+		"POST",
+		"/api/v1/accounts/auth/session",
+		auth_request,
+		current_account_session_token)
+	if response.has("error"):
+		return response
+
+	return _normalize_auth_session_response(response)
+
+
+func list_linked_providers(current_account_session_token: String) -> Dictionary:
+	var preflight := _validate_runtime_configuration("list_linked_providers")
+	if not preflight.is_empty():
+		return preflight
+	if current_account_session_token.strip_edges().is_empty():
+		return _error_result(ERROR_AUTH_REQUIRED, "list_linked_providers requires an account session.")
+
+	var response := _request_json(
+		"GET",
+		"/api/v1/accounts/auth/providers",
+		null,
+		current_account_session_token.strip_edges(),
+		"providers")
+	if response.has("error"):
+		return response
+
+	return _normalize_linked_providers_response(response)
+
+
 func create_account_slot(account_id: String, account_session_token: String, payload: Dictionary) -> Dictionary:
 	var preflight := _validate_account_session_configuration("create_account_slot", account_id, account_session_token)
 	if not preflight.is_empty():
@@ -395,6 +437,35 @@ func clear_recorded_requests() -> void:
 	_recorded_requests.clear()
 
 
+func clear_cache() -> void:
+	_save_cache.clear()
+
+
+func _normalize_auth_session_request(input: Dictionary, action: String) -> Dictionary:
+	if typeof(input) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, action + " input must be a dictionary.")
+	var provider := String(input.get("provider", "")).strip_edges()
+	var token := String(input.get("token", input.get("idToken", input.get("id_token", "")))).strip_edges()
+	if provider.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, action + " requires provider.")
+	if provider != "google" and provider != "oidc_jwt":
+		return _error_result(ERROR_INVALID_REQUEST, action + " provider must be google or oidc_jwt.")
+	if token.is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, action + " requires a provider token.")
+
+	var request_body := {
+		"provider": provider,
+		"token": token,
+	}
+	if input.has("deviceLabel") or input.has("device_label"):
+		var device_label = input.get("deviceLabel", input.get("device_label", null))
+		if not (typeof(device_label) == TYPE_STRING or device_label == null):
+			return _error_result(ERROR_INVALID_REQUEST, action + " deviceLabel must be a string or null.")
+		if typeof(device_label) == TYPE_STRING and not String(device_label).strip_edges().is_empty():
+			request_body["deviceLabel"] = String(device_label).strip_edges()
+	return request_body
+
+
 func _normalize_slot_request(payload: Dictionary, action: String) -> Dictionary:
 	var slot_id := String(payload.get("slotId", ""))
 	if slot_id.is_empty():
@@ -472,12 +543,12 @@ func _validate_account_session_configuration(action: String, account_id: String,
 	return {}
 
 
-func _request_json(method: String, path: String, body: Variant = null, account_session_token: String = "") -> Dictionary:
+func _request_json(method: String, path: String, body: Variant = null, account_session_token: String = "", array_response_key: String = "") -> Dictionary:
 	var headers := _request_headers(account_session_token)
 	_record_request(method, path, body, account_session_token, headers)
 	var fixture := _pop_fixture_response(method, path)
 	if not fixture.is_empty():
-		return _parse_transport_response(int(fixture.get("status_code", 500)), String(fixture.get("body", "")))
+		return _parse_transport_response(int(fixture.get("status_code", 500)), String(fixture.get("body", "")), array_response_key)
 
 	var url_parts := _parse_api_origin()
 	if url_parts.has("error"):
@@ -513,7 +584,7 @@ func _request_json(method: String, path: String, body: Variant = null, account_s
 			"godotError": request_error,
 		})
 
-	var response := _read_response(client)
+	var response := _read_response(client, array_response_key)
 	client.close()
 	return response
 
@@ -560,7 +631,12 @@ func _redact_sensitive_value(value: Variant) -> Variant:
 		var redacted := {}
 		for key in (value as Dictionary).keys():
 			var key_name := String(key)
-			if key_name == "transferCode" or key_name == "accountSessionToken" or key_name == "account_session_token":
+			if key_name == "transferCode" \
+				or key_name == "accountSessionToken" \
+				or key_name == "account_session_token" \
+				or key_name == "token" \
+				or key_name == "idToken" \
+				or key_name == "id_token":
 				redacted[key] = "[redacted]"
 			else:
 				redacted[key] = _redact_sensitive_value((value as Dictionary)[key])
@@ -623,7 +699,7 @@ func _wait_for_connection(client: HTTPClient) -> int:
 	return OK
 
 
-func _read_response(client: HTTPClient) -> Dictionary:
+func _read_response(client: HTTPClient, array_response_key: String = "") -> Dictionary:
 	var deadline := Time.get_ticks_msec() + int(timeout_seconds * 1000.0)
 	while client.get_status() == HTTPClient.STATUS_REQUESTING:
 		var poll_error := client.poll()
@@ -656,10 +732,10 @@ func _read_response(client: HTTPClient) -> Dictionary:
 
 	var status_code := client.get_response_code()
 	var body_text := body_bytes.get_string_from_utf8()
-	return _parse_transport_response(status_code, body_text)
+	return _parse_transport_response(status_code, body_text, array_response_key)
 
 
-func _parse_transport_response(status_code: int, body_text: String) -> Dictionary:
+func _parse_transport_response(status_code: int, body_text: String, array_response_key: String = "") -> Dictionary:
 	var parsed: Variant = {}
 	if not body_text.is_empty():
 		parsed = JSON.parse_string(body_text)
@@ -669,6 +745,10 @@ func _parse_transport_response(status_code: int, body_text: String) -> Dictionar
 			})
 
 	if status_code >= 200 and status_code < 300:
+		if typeof(parsed) == TYPE_ARRAY and not array_response_key.is_empty():
+			return {
+				array_response_key: parsed,
+			}
 		if typeof(parsed) != TYPE_DICTIONARY:
 			return _error_result(ERROR_SERVER, "Persistly response must be a JSON object.")
 		return parsed
@@ -711,6 +791,60 @@ func _normalize_transfer_code_response(response: Dictionary) -> Dictionary:
 		"transferCode": String(response["transferCode"]),
 		"expiresAt": String(response["expiresAt"]),
 		"expiresInSeconds": int(response["expiresInSeconds"]),
+	}
+
+
+func _normalize_auth_session_response(response: Dictionary) -> Dictionary:
+	if typeof(response.get("accountId", null)) != TYPE_STRING or String(response.get("accountId", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly auth session response is missing accountId.")
+	if typeof(response.get("accountSessionToken", null)) != TYPE_STRING or String(response.get("accountSessionToken", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly auth session response is missing accountSessionToken.")
+	if typeof(response.get("linkedProvider", null)) != TYPE_STRING or String(response.get("linkedProvider", "")).is_empty():
+		return _error_result(ERROR_SERVER, "Persistly auth session response is missing linkedProvider.")
+
+	var normalized := _copy_response_extras(response, [])
+	normalized["accountId"] = String(response["accountId"])
+	normalized["accountSessionToken"] = String(response["accountSessionToken"])
+	normalized["linkedProvider"] = String(response["linkedProvider"])
+	normalized["isNewAccount"] = bool(response.get("isNewAccount", false))
+	normalized["wasProviderNewForAccount"] = bool(response.get("wasProviderNewForAccount", false))
+	if response.has("syncPolicy"):
+		if typeof(response["syncPolicy"]) != TYPE_DICTIONARY:
+			return _error_result(ERROR_SERVER, "Persistly auth session response syncPolicy must be a dictionary.")
+		normalized["syncPolicy"] = (response["syncPolicy"] as Dictionary).duplicate(true)
+	if response.has("account"):
+		if typeof(response["account"]) != TYPE_DICTIONARY:
+			return _error_result(ERROR_SERVER, "Persistly auth session response account must be a dictionary.")
+		var account := _normalize_account_object(response["account"], true)
+		if account.has("error"):
+			return account
+		normalized["account"] = account
+	if response.has("slot"):
+		if typeof(response["slot"]) != TYPE_DICTIONARY:
+			return _error_result(ERROR_SERVER, "Persistly auth session response slot must be a dictionary.")
+		var slot := _normalize_slot_object(response["slot"], true)
+		if slot.has("error"):
+			return slot
+		normalized["slot"] = slot
+	return normalized
+
+
+func _normalize_linked_providers_response(response: Variant) -> Dictionary:
+	var providers: Array = []
+	if typeof(response) == TYPE_ARRAY:
+		providers = response
+	elif typeof(response) == TYPE_DICTIONARY and typeof((response as Dictionary).get("providers", null)) == TYPE_ARRAY:
+		providers = (response as Dictionary)["providers"]
+	else:
+		return _error_result(ERROR_SERVER, "Persistly linked providers response is missing providers.")
+
+	var normalized_providers: Array = []
+	for provider in providers:
+		if typeof(provider) != TYPE_DICTIONARY:
+			return _error_result(ERROR_SERVER, "Persistly linked provider row must be a dictionary.")
+		normalized_providers.append((provider as Dictionary).duplicate(true))
+	return {
+		"providers": normalized_providers,
 	}
 
 

@@ -53,6 +53,7 @@ func _initialize() -> void:
 	_check_no_raw_save_transport(client, CLIENT_SCRIPT)
 	_check_account_routes(client)
 	_check_transfer_code_routes(client)
+	_check_auth_routes(client, client_script)
 	_check_slot_routes(client, client_script)
 	_check_runtime_config(client)
 	_check_error_mapping(client, client_script)
@@ -66,6 +67,10 @@ func _check_versions(client_script: GDScript) -> void:
 	_expect_equal(client_script.ERROR_SLOT_DELETED, "slot_deleted", "ERROR_SLOT_DELETED")
 	_expect_equal(client_script.ERROR_SLOT_ARCHIVED, "slot_archived", "ERROR_SLOT_ARCHIVED")
 	_expect_equal(client_script.ERROR_MONTHLY_QUOTA_EXCEEDED, "monthly_quota_exceeded", "ERROR_MONTHLY_QUOTA_EXCEEDED")
+	_expect_equal(client_script.ERROR_AUTH_REQUIRED, "auth_required", "ERROR_AUTH_REQUIRED")
+	_expect_equal(client_script.ERROR_PROVIDER_TOKEN_INVALID, "provider_token_invalid", "ERROR_PROVIDER_TOKEN_INVALID")
+	_expect_equal(client_script.ERROR_AUTH_PROVIDER_NOT_CONFIGURED, "auth_provider_not_configured", "ERROR_AUTH_PROVIDER_NOT_CONFIGURED")
+	_expect_equal(client_script.ERROR_ACCOUNT_AUTH_CONFLICT, "account_auth_conflict", "ERROR_ACCOUNT_AUTH_CONFLICT")
 
 
 func _check_account_first_surface(client: Object, _client_script: GDScript) -> void:
@@ -81,6 +86,8 @@ func _check_account_first_surface(client: Object, _client_script: GDScript) -> v
 		"archive_account_slot",
 		"delete_account_slot",
 		"delete_account",
+		"create_auth_session",
+		"list_linked_providers",
 	]:
 		if not client.has_method(method_name):
 			_fail("PersistlyClient should expose account-first method " + method_name + ".")
@@ -184,6 +191,58 @@ func _check_transfer_code_routes(client: Object) -> void:
 		_fail("Recorded transfer-code requests should redact raw transfer codes.")
 	if JSON.stringify(requests).find("pst_account_session") >= 0 or JSON.stringify(requests).find("pst_new_session") >= 0:
 		_fail("Recorded transfer-code requests should not expose account session tokens.")
+	client.clear_recorded_requests()
+
+
+func _check_auth_routes(client: Object, client_script: GDScript) -> void:
+	var signed_in: Dictionary = client.create_auth_session({
+		"provider": "google",
+		"token": "google-id-token",
+		"deviceLabel": "Steam Deck",
+	})
+	_expect_equal(signed_in.get("accountId", ""), "acc_auth", "create_auth_session accountId")
+	_expect_equal(signed_in.get("accountSessionToken", ""), "pst_auth_session", "create_auth_session accountSessionToken")
+	_expect_equal(signed_in.get("linkedProvider", ""), "google", "create_auth_session linkedProvider")
+	_expect_equal(signed_in.get("isNewAccount", false), true, "create_auth_session isNewAccount")
+
+	var linked: Dictionary = client.create_auth_session({
+		"provider": "oidc_jwt",
+		"token": "oidc-token",
+		"deviceLabel": "Laptop",
+	}, "pst_current_session")
+	_expect_equal(linked.get("wasProviderNewForAccount", false), true, "create_auth_session linked current provider")
+
+	var providers: Dictionary = client.list_linked_providers("pst_auth_session")
+	var provider_rows: Array = providers.get("providers", [])
+	if provider_rows.size() != 1:
+		_fail("list_linked_providers should return one provider row.")
+	else:
+		_expect_equal(provider_rows[0].get("provider", ""), "google", "list_linked_providers provider")
+
+	var invalid_token: Dictionary = client.create_auth_session({
+		"provider": "google",
+		"token": "bad-token",
+	})
+	_expect_error_code(invalid_token, client_script.ERROR_PROVIDER_TOKEN_INVALID, "create_auth_session preserves provider_token_invalid")
+	var not_configured: Dictionary = client.create_auth_session({
+		"provider": "oidc_jwt",
+		"token": "missing-config-token",
+	})
+	_expect_error_code(not_configured, client_script.ERROR_AUTH_PROVIDER_NOT_CONFIGURED, "create_auth_session preserves auth_provider_not_configured")
+	var conflict: Dictionary = client.create_auth_session({
+		"provider": "google",
+		"token": "conflict-token",
+	}, "pst_current_session")
+	_expect_error_code(conflict, client_script.ERROR_ACCOUNT_AUTH_CONFLICT, "create_auth_session preserves account_auth_conflict")
+
+	var requests: Array = client.get_recorded_requests()
+	_expect_request(requests[0], "POST", "/api/v1/accounts/auth/session", false)
+	_expect_request(requests[1], "POST", "/api/v1/accounts/auth/session", true)
+	_expect_request(requests[2], "GET", "/api/v1/accounts/auth/providers", true)
+	if JSON.stringify(requests).find("google-id-token") >= 0 or JSON.stringify(requests).find("oidc-token") >= 0:
+		_fail("Recorded auth bridge requests should redact provider tokens.")
+	if JSON.stringify(requests).find("pst_auth_session") >= 0 or JSON.stringify(requests).find("pst_current_session") >= 0:
+		_fail("Recorded auth bridge requests should not expose account session tokens.")
 	client.clear_recorded_requests()
 
 
@@ -299,6 +358,56 @@ func _seed_fixture_responses(client: Object) -> void:
 		"accountSessionToken": "pst_new_session",
 		"account": ACCOUNT,
 		"syncPolicy": SYNC_POLICY,
+	})
+	client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 200, {
+		"accountId": "acc_auth",
+		"accountSessionToken": "pst_auth_session",
+		"isNewAccount": true,
+		"linkedProvider": "google",
+		"wasProviderNewForAccount": true,
+	})
+	client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 200, {
+		"accountId": "acc_test",
+		"accountSessionToken": "pst_linked_session",
+		"isNewAccount": false,
+		"linkedProvider": "oidc_jwt",
+		"wasProviderNewForAccount": true,
+	})
+	client.register_fixture_response("GET", "/api/v1/accounts/auth/providers", 200, [
+		{
+			"provider": "google",
+			"display": {
+				"label": "Google",
+				"emailHint": "a***@gmail.com",
+			},
+			"linkedAt": "2026-06-06T00:00:00Z",
+		},
+	])
+	client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 401, {
+		"error": {
+			"code": "provider_token_invalid",
+			"message": "Provider token could not be verified.",
+		},
+	})
+	client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 403, {
+		"error": {
+			"code": "auth_provider_not_configured",
+			"message": "Auth provider is not configured for this environment.",
+		},
+	})
+	client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 409, {
+		"error": {
+			"code": "account_auth_conflict",
+			"message": "This identity is already linked to another Persistly account.",
+			"localAccount": {
+				"hasSlots": true,
+				"slotCount": 1,
+			},
+			"authenticatedAccount": {
+				"hasSlots": true,
+				"slotCount": 2,
+			},
+		},
 	})
 	client.register_fixture_response("POST", "/api/v1/accounts/acc_test/slots", 201, {
 		"accountId": "acc_test",

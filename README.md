@@ -51,6 +51,20 @@ var synced := persistly.force_sync_data({"bypassCooldown": true})
 
 `save_data` writes local data immediately to the default `autosave` slot. The first `force_sync_data`, `sync_due_slots`, or `sync_due` call creates the remote Persistly account and matching slot if needed. Use `save_slot`, `load_slot`, and `force_sync` for multiple named slots.
 
+`anonymousFirst` is the default account mode. Use `authRequired` when your game requires sign-in before cloud sync:
+
+```gdscript
+persistly.configure({
+	"runtime_key": "ps_test_replace_me",
+	"accountMode": "authRequired",
+	"localAccountKey": "signed-in-player",
+})
+
+persistly.save_data({ "level": 1 })
+var blocked := persistly.force_sync_data({ "bypassCooldown": true })
+# blocked["status"] == "auth_required"
+```
+
 ## Account Sessions
 
 Create an account before a slot picker when your game needs an explicit account session:
@@ -84,11 +98,38 @@ Transfer codes are short-lived and single-use. Show the code to the player, but 
 
 Use `clear_local_account()` before switching players on the same device. It only wipes local SDK state. Use `delete_account()` for permanent remote erasure.
 
+## Auth Bridge
+
+Auth Bridge exchanges a trusted provider token for a Persistly `accountId` and `accountSessionToken`. Provider tokens are only sent to `POST /api/v1/accounts/auth/session`; normal save/load/sync routes continue using the Persistly account session.
+
+```gdscript
+var signed_in := persistly.sign_in_with_google_id_token(google_id_token, {
+	"deviceLabel": OS.get_name(),
+})
+
+var oidc := persistly.sign_in_with_provider({
+	"provider": "oidc_jwt",
+	"token": oidc_jwt,
+	"deviceLabel": OS.get_name(),
+})
+
+var linked := persistly.link_provider({
+	"provider": "google",
+	"token": second_google_id_token,
+})
+
+var providers := persistly.list_linked_providers()
+var signed_out := persistly.sign_out()
+```
+
+`sign_out()` clears the local Persistly account session and slot cache for this device. It does not delete the remote account.
+
 ## Templates
 
 - `templates/one-save` for idle, casual, and one-save games.
 - `templates/multi-slot` for manual saves, campaigns, and slot select screens.
 - `templates/account-slots` for games with sign-in or cross-device restore.
+- `templates/auth-required` for games where cloud sync waits for Google or OIDC/JWT sign-in.
 
 ## Runtime Surface
 
@@ -100,6 +141,11 @@ Facade methods:
 - `create_transfer_code`
 - `attach_with_transfer_code`
 - `get_account_session`
+- `sign_in_with_google_id_token`
+- `sign_in_with_provider`
+- `link_provider`
+- `list_linked_providers`
+- `sign_out`
 - `save_account_data`
 - `patch_account_data`
 - `get_account_data`
@@ -139,6 +185,8 @@ Low-level client account methods use the same public facade terms: `accountData`
 - `delete_account_slot`
 - `delete_account`
 - `get_runtime_config`
+- `create_auth_session`
+- `list_linked_providers`
 
 Account and slot routes send `X-Persistly-Account-Session`. Release packages do not expose legacy compatibility aliases.
 

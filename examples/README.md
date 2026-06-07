@@ -32,3 +32,10 @@ What it proves:
 - a Godot game can save and load local slot state first
 - the SDK can create a Persistly account lazily and sync a named save slot
 - explicit `accountId` plus `accountSessionToken` is the restore path; `playerRef` and `externalAccountRef` are references only, not lookup APIs
+
+## Auth Bridge
+
+- `auth_google_usage.gd` shows `authRequired` mode with `sign_in_with_google_id_token`.
+- `auth_oidc_usage.gd` shows generic `oidc_jwt` sign-in, provider linking, and linked provider listing.
+
+These examples assume provider trust is already configured for the Persistly project environment.

@@ -52,6 +52,9 @@ func _initialize() -> void:
 	_check_first_sync_creates_account_and_slot(game_saves_script)
 	_check_account_data_sync(game_saves_script)
 	_check_transfer_code_facade(game_saves_script)
+	_check_auth_required_mode(game_saves_script)
+	_check_auth_facade_session_flow(game_saves_script)
+	_check_auth_conflict_mapping(game_saves_script)
 	_check_clear_and_delete_boundaries(game_saves_script)
 	_check_reserved_slot_info_rejected(game_saves_script)
 	_finish()
@@ -62,6 +65,11 @@ func _check_status_and_target_constants(game_saves_script: Script) -> void:
 	var target = game_saves_script.PersistlyGameSaveTarget
 	_expect_equal(target.ACCOUNT, "account", "PersistlyGameSaveTarget.ACCOUNT")
 	_expect_equal(target.SLOT, "slot", "PersistlyGameSaveTarget.SLOT")
+	var account_mode = game_saves_script.PersistlyAccountMode
+	_expect_equal(account_mode.ANONYMOUS_FIRST, "anonymousFirst", "PersistlyAccountMode.ANONYMOUS_FIRST")
+	_expect_equal(account_mode.AUTH_REQUIRED, "authRequired", "PersistlyAccountMode.AUTH_REQUIRED")
+	var status = game_saves_script.PersistlyGameSaveStatus
+	_expect_equal(status.AUTH_REQUIRED, "auth_required", "PersistlyGameSaveStatus.AUTH_REQUIRED")
 
 
 func _check_account_first_facade_surface(game_saves_script: Script) -> void:
@@ -72,6 +80,11 @@ func _check_account_first_facade_surface(game_saves_script: Script) -> void:
 		"create_transfer_code",
 		"attach_with_transfer_code",
 		"get_account_session",
+		"sign_in_with_google_id_token",
+		"sign_in_with_provider",
+		"link_provider",
+		"list_linked_providers",
+		"sign_out",
 		"force_sync_account",
 		"sync_due_account",
 		"clear_local_account",
@@ -111,6 +124,7 @@ func _check_local_slot_flow(game_saves_script: Script) -> void:
 		"storage_path": _storage_path("local_flow"),
 	})
 	_expect_equal(configured.get("status", ""), "configured", "configure status")
+	_expect_equal(configured.get("accountMode", ""), "anonymousFirst", "configure default accountMode")
 	_expect_equal(configured.get("localAccountKey", ""), "validation-local-flow", "configure localAccountKey")
 
 	var saved: Dictionary = persistly.save_slot("autosave", {
@@ -269,6 +283,130 @@ func _check_transfer_code_facade(game_saves_script: Script) -> void:
 	non_empty.save_slot("autosave", {"level": 1})
 	var rejected: Dictionary = non_empty.attach_with_transfer_code("P7K2D-M9Q4R")
 	_expect_equal(rejected.get("error", {}).get("code", ""), "invalid_request", "attach_with_transfer_code rejects non-empty local state")
+
+
+func _check_auth_required_mode(game_saves_script: Script) -> void:
+	var persistly: Object = game_saves_script.new()
+	var configured: Dictionary = persistly.configure({
+		"runtime_key": "ps_test_replace_me",
+		"accountMode": "authRequired",
+		"localAccountKey": "validation-auth-required",
+		"storage_path": _storage_path("auth_required"),
+	})
+	_expect_equal(configured.get("accountMode", ""), "authRequired", "authRequired configure accountMode")
+
+	var saved: Dictionary = persistly.save_data(SLOT["data"], {
+		"slotInfo": SLOT["slotInfo"],
+	})
+	_expect_equal(saved.get("status", ""), "local_saved", "authRequired save_data remains local")
+
+	var synced: Dictionary = persistly.force_sync_data({
+		"bypassCooldown": true,
+	})
+	_expect_equal(synced.get("status", ""), "auth_required", "authRequired force_sync_data before sign-in")
+	_expect_equal(synced.get("error", {}).get("code", ""), "auth_required", "authRequired force_sync_data error code")
+	if persistly._client.get_recorded_requests().size() != 0:
+		_fail("authRequired force_sync_data before sign-in must not create an anonymous remote account.")
+
+
+func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
+	var persistly: Object = game_saves_script.new()
+	persistly.configure({
+		"runtime_key": "ps_test_replace_me",
+		"accountMode": "authRequired",
+		"localAccountKey": "validation-auth-session",
+		"storage_path": _storage_path("auth_session"),
+	})
+	persistly.save_data(SLOT["data"], {
+		"slotInfo": SLOT["slotInfo"],
+	})
+	persistly._client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 200, {
+		"accountId": "acc_auth",
+		"accountSessionToken": "pst_auth_session",
+		"isNewAccount": true,
+		"linkedProvider": "google",
+		"wasProviderNewForAccount": true,
+	})
+	persistly._client.register_fixture_response("GET", "/api/v1/accounts/auth/providers", 200, [
+		{
+			"provider": "google",
+			"display": {
+				"label": "Google",
+				"emailHint": "a***@gmail.com",
+			},
+			"linkedAt": "2026-06-06T00:00:00Z",
+		},
+	])
+	persistly._client.register_fixture_response("POST", "/api/v1/accounts/acc_auth/slots", 201, {
+		"accountId": "acc_auth",
+		"account": _account_with_slot("autosave"),
+		"slot": SLOT,
+	})
+
+	var signed_in: Dictionary = persistly.sign_in_with_google_id_token("google-id-token", {
+		"deviceLabel": "Steam Deck",
+	})
+	_expect_equal(signed_in.get("status", ""), "synced", "sign_in_with_google_id_token status")
+	_expect_equal(signed_in.get("accountId", ""), "acc_auth", "sign_in_with_google_id_token accountId")
+	_expect_equal(persistly.get_account_session({"includeToken": true}).get("accountSessionToken", ""), "pst_auth_session", "sign-in stores accountSessionToken")
+
+	var providers: Dictionary = persistly.list_linked_providers()
+	var rows: Array = providers.get("providers", [])
+	if rows.size() != 1 or rows[0].get("provider", "") != "google":
+		_fail("list_linked_providers should return linked Google provider.")
+
+	var synced: Dictionary = persistly.force_sync_data({
+		"bypassCooldown": true,
+	})
+	_expect_equal(synced.get("status", ""), "synced", "force_sync_data after sign-in status")
+
+	var requests: Array = persistly._client.get_recorded_requests()
+	_expect_equal(requests[0].get("path", ""), "/api/v1/accounts/auth/session", "sign-in auth route")
+	_expect_equal(requests[1].get("path", ""), "/api/v1/accounts/auth/providers", "list providers route")
+	_expect_equal(requests[2].get("path", ""), "/api/v1/accounts/acc_auth/slots", "signed-in slot create route")
+	_expect_has_account_session_header(requests[2])
+	if JSON.stringify(requests).find("google-id-token") >= 0 or JSON.stringify(requests).find("pst_auth_session") >= 0:
+		_fail("Auth facade recorded requests should redact provider tokens and account sessions.")
+
+	var signed_out: Dictionary = persistly.sign_out()
+	_expect_equal(signed_out.get("status", ""), "local_saved", "sign_out status")
+	_expect_equal(persistly.get_account_session({"includeToken": true}).get("accountId", ""), "", "sign_out clears accountId")
+	_expect_equal(persistly.load_data().get("status", ""), "not_found", "sign_out clears slots")
+
+
+func _check_auth_conflict_mapping(game_saves_script: Script) -> void:
+	var persistly: Object = game_saves_script.new()
+	persistly.configure({
+		"runtime_key": "ps_test_replace_me",
+		"accountId": "acc_local",
+		"accountSessionToken": "pst_local_session",
+		"localAccountKey": "validation-auth-conflict",
+		"storage_path": _storage_path("auth_conflict"),
+	})
+	persistly._client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 409, {
+		"error": {
+			"code": "account_auth_conflict",
+			"message": "This identity is already linked to another Persistly account.",
+			"localAccount": {
+				"hasSlots": true,
+				"slotCount": 1,
+			},
+			"authenticatedAccount": {
+				"hasSlots": true,
+				"slotCount": 2,
+			},
+		},
+	})
+
+	var conflict: Dictionary = persistly.link_provider({
+		"provider": "google",
+		"token": "conflict-token",
+	})
+	_expect_equal(conflict.get("status", ""), "account_auth_conflict", "link_provider conflict status")
+	_expect_equal(conflict.get("error", {}).get("code", ""), "account_auth_conflict", "link_provider conflict error code")
+	_expect_equal(persistly.get_account_session({"includeToken": true}).get("accountId", ""), "acc_local", "link_provider conflict keeps local account")
+	var request: Dictionary = persistly._client.get_recorded_requests()[0]
+	_expect_has_account_session_header(request)
 
 
 func _check_clear_and_delete_boundaries(game_saves_script: Script) -> void:

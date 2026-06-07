@@ -35,6 +35,8 @@ Use `clear_local_account()` to wipe the local account session plus all local slo
 
 Use `create_account()` for explicit account-first flows, or `attach_account(accountId, accountSessionToken)` to load an existing Persistly account into empty local state.
 
+Use `accountMode: "authRequired"` when your game allows local saves but requires Google or OIDC/JWT sign-in before cloud sync. Call `sign_in_with_google_id_token()` or `sign_in_with_provider()` to exchange a provider token for the Persistly account session used by normal save and sync calls.
+
 Use `create_transfer_code()` on a device that already has a local account session, and `attach_with_transfer_code(code)` on an empty second device for short-lived anonymous save transfer. Transfer codes are single-use and should be shown to the player without logging them.
 
 Use `get_account_data()` for account-wide data. `patch_account_data()` shallow-merges top-level keys and deletes a top-level key when its patch value is `null`.

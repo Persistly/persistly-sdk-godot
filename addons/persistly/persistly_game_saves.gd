@@ -15,9 +15,11 @@ const ERROR_NOT_CONFIGURED := "not_configured"
 const ERROR_INVALID_REQUEST := "invalid_request"
 const ERROR_NOT_FOUND := "not_found"
 const ERROR_STORAGE := "storage_error"
+const ERROR_AUTH_REQUIRED := "auth_required"
 
 var runtime_key: String = ""
 var sync_interval_seconds: float = DEFAULT_SYNC_INTERVAL_SECONDS
+var account_mode: String = PersistlyAccountMode.ANONYMOUS_FIRST
 var player_ref: Variant = null
 var external_account_ref: Variant = null
 var local_account_key: String = ""
@@ -40,6 +42,9 @@ var _on_sync_result: Callable = Callable()
 func configure(settings: Dictionary) -> Dictionary:
 	runtime_key = String(_setting(settings, "runtime_key", "runtimeKey", "")).strip_edges()
 	sync_interval_seconds = max(float(_setting(settings, "sync_interval_seconds", "syncIntervalSeconds", DEFAULT_SYNC_INTERVAL_SECONDS)), 1.0)
+	account_mode = String(_setting(settings, "account_mode", "accountMode", PersistlyAccountMode.ANONYMOUS_FIRST)).strip_edges()
+	if account_mode.is_empty():
+		account_mode = PersistlyAccountMode.ANONYMOUS_FIRST
 	player_ref = _setting(settings, "player_ref", "playerRef", null)
 	external_account_ref = _setting(settings, "external_account_ref", "externalAccountRef", null)
 	_storage_path = String(_setting(settings, "storage_path", "storagePath", DEFAULT_STORAGE_PATH)).rstrip("/")
@@ -57,6 +62,8 @@ func configure(settings: Dictionary) -> Dictionary:
 
 	if runtime_key.is_empty():
 		return _error_result(ERROR_NOT_CONFIGURED, "PersistlyGameSaves requires runtime_key in configure settings.")
+	if account_mode != PersistlyAccountMode.ANONYMOUS_FIRST and account_mode != PersistlyAccountMode.AUTH_REQUIRED:
+		return _error_result(ERROR_INVALID_REQUEST, "PersistlyGameSaves accountMode must be anonymousFirst or authRequired.")
 
 	var storage_error := _load_local_records()
 	if not storage_error.is_empty():
@@ -78,6 +85,7 @@ func configure(settings: Dictionary) -> Dictionary:
 	return {
 		"status": "configured",
 		"syncIntervalSeconds": sync_interval_seconds,
+		"accountMode": account_mode,
 		"localAccountKey": local_account_key,
 		"accountId": account_id,
 	}
@@ -145,6 +153,47 @@ func attach_with_transfer_code(transfer_code: String, options: Dictionary = {}) 
 	return _account_result(PersistlyGameSaveStatus.SYNCED, false)
 
 
+func sign_in_with_google_id_token(id_token: String, options := {}) -> Dictionary:
+	if typeof(options) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "sign_in_with_google_id_token options must be a dictionary.")
+	var input := (options as Dictionary).duplicate(true)
+	input["provider"] = "google"
+	input["token"] = id_token
+	return sign_in_with_provider(input)
+
+
+func sign_in_with_provider(input: Dictionary) -> Dictionary:
+	var preflight := _validate_configured("sign_in_with_provider")
+	if not preflight.is_empty():
+		return preflight
+	return _exchange_provider_session(input, account_session_token)
+
+
+func link_provider(input: Dictionary) -> Dictionary:
+	var preflight := _validate_configured("link_provider")
+	if not preflight.is_empty():
+		return preflight
+	if account_session_token.is_empty():
+		return _auth_required_result(PersistlyGameSaveTarget.ACCOUNT, "link_provider requires sign-in or an existing account session.")
+	return _exchange_provider_session(input, account_session_token)
+
+
+func list_linked_providers() -> Dictionary:
+	var preflight := _validate_configured("list_linked_providers")
+	if not preflight.is_empty():
+		return preflight
+	if account_session_token.is_empty():
+		return _auth_required_result(PersistlyGameSaveTarget.ACCOUNT, "list_linked_providers requires sign-in or an existing account session.")
+	var providers: Dictionary = _client.list_linked_providers(account_session_token)
+	if providers.has("error"):
+		return _map_remote_error(providers, PersistlyGameSaveTarget.ACCOUNT)
+	return providers
+
+
+func sign_out() -> Dictionary:
+	return clear_local_account()
+
+
 func ensure_account() -> Dictionary:
 	var preflight := _validate_configured("ensure_account")
 	if not preflight.is_empty():
@@ -156,6 +205,9 @@ func ensure_account() -> Dictionary:
 				return restored
 			return _account_result(PersistlyGameSaveStatus.SYNCED, false)
 		return _account_result(PersistlyGameSaveStatus.SYNCED, false)
+
+	if account_mode == PersistlyAccountMode.AUTH_REQUIRED:
+		return _auth_required_result(PersistlyGameSaveTarget.ACCOUNT, "Sign in before creating a cloud account.")
 
 	var config_result := _refresh_runtime_policy()
 	if config_result.has("error") and config_result["error"].get("code", "") != CLIENT_SCRIPT.ERROR_RATE_LIMITED:
@@ -523,6 +575,8 @@ func clear_local_account() -> Dictionary:
 	_dirty_account = false
 	_account_last_synced_msec = 0
 	_account_updated_at_unix = 0.0
+	if _client.has_method("clear_cache"):
+		_client.clear_cache()
 	_persist_account()
 	_persist_slot_index()
 	return {
@@ -616,6 +670,8 @@ func _sync_account(options: Dictionary, force: bool) -> Dictionary:
 	if not preflight.is_empty():
 		return preflight
 	if account_id.is_empty() or account_session_token.is_empty():
+		if account_mode == PersistlyAccountMode.AUTH_REQUIRED:
+			return _auth_required_result(PersistlyGameSaveTarget.ACCOUNT, "Sign in before syncing account data.")
 		return ensure_account()
 	if account_version <= 0:
 		var restored := _restore_account(_dirty_account)
@@ -669,6 +725,10 @@ func _sync_slot(slot_id: String, options: Dictionary, force: bool, overwrite: bo
 		return _slot_result(slot, PersistlyGameSaveStatus.COOLDOWN)
 
 	if account_id.is_empty() or account_session_token.is_empty():
+		if account_mode == PersistlyAccountMode.AUTH_REQUIRED:
+			return _auth_required_result(PersistlyGameSaveTarget.SLOT, "Sign in before syncing cloud save data.", {
+				"slotId": slot_id,
+			})
 		var first_sync_result := _create_account_with_first_slot(slot_id, slot)
 		if first_sync_result.has("error") or first_sync_result.get("status", "") == PersistlyGameSaveStatus.SYNCED:
 			return first_sync_result
@@ -726,6 +786,10 @@ func _recover_existing_remote_slot(slot_id: String) -> Dictionary:
 
 
 func _create_account_with_first_slot(slot_id: String, slot: Dictionary) -> Dictionary:
+	if account_mode == PersistlyAccountMode.AUTH_REQUIRED:
+		return _auth_required_result(PersistlyGameSaveTarget.SLOT, "Sign in before syncing cloud save data.", {
+			"slotId": slot_id,
+		})
 	var payload: Dictionary = {
 		"accountData": account_data.duplicate(true),
 		"slot": {
@@ -750,6 +814,31 @@ func _create_account_with_first_slot(slot_id: String, slot: Dictionary) -> Dicti
 	_account_last_synced_msec = Time.get_ticks_msec()
 	_persist_account()
 	return _finalize_synced_slot(slot_id)
+
+
+func _exchange_provider_session(input: Dictionary, current_session_token: String = "") -> Dictionary:
+	if typeof(input) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "Auth provider input must be a dictionary.")
+	var session: Dictionary = _client.create_auth_session(input, current_session_token)
+	if session.has("error"):
+		return _map_remote_error(session, PersistlyGameSaveTarget.ACCOUNT)
+
+	_apply_account_response(session, true)
+	_dirty_account = false
+	_account_last_synced_msec = Time.get_ticks_msec()
+	_persist_account()
+
+	var result := _account_result(PersistlyGameSaveStatus.SYNCED, false)
+	result["accountId"] = account_id
+	result["linkedProvider"] = String(session.get("linkedProvider", ""))
+	result["isNewAccount"] = bool(session.get("isNewAccount", false))
+	result["wasProviderNewForAccount"] = bool(session.get("wasProviderNewForAccount", false))
+	if session.has("account"):
+		result["account"] = _duplicate_dictionary(session["account"])
+	if session.has("slot"):
+		result["slot"] = _duplicate_dictionary(session["slot"])
+	_notify_sync_result(result)
+	return result
 
 
 func _finalize_synced_slot(slot_id: String, sync_response: Dictionary = {}) -> Dictionary:
@@ -978,6 +1067,12 @@ func _map_remote_error(remote_error: Dictionary, target: String, slot_id: String
 	}
 	if not slot_id.is_empty():
 		result["slotId"] = slot_id
+	return result
+
+
+func _auth_required_result(target: String, message: String, details: Dictionary = {}) -> Dictionary:
+	var result := _error_result(ERROR_AUTH_REQUIRED, message, details)
+	result["target"] = target
 	return result
 
 
@@ -1223,6 +1318,7 @@ class PersistlyGameSaveStatus:
 	const CONFLICT := "conflict"
 	const OFFLINE := "offline"
 	const RATE_LIMITED := "rate_limited"
+	const AUTH_REQUIRED := "auth_required"
 
 
 class PersistlySlotStatus:
@@ -1235,8 +1331,14 @@ class PersistlySlotStatus:
 	const CONFLICT := "conflict"
 	const OFFLINE := "offline"
 	const RATE_LIMITED := "rate_limited"
+	const AUTH_REQUIRED := "auth_required"
 
 
 class PersistlyGameSaveTarget:
 	const ACCOUNT := "account"
 	const SLOT := "slot"
+
+
+class PersistlyAccountMode:
+	const ANONYMOUS_FIRST := "anonymousFirst"
+	const AUTH_REQUIRED := "authRequired"

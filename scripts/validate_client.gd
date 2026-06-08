@@ -195,19 +195,27 @@ func _check_transfer_code_routes(client: Object) -> void:
 
 
 func _check_auth_routes(client: Object, client_script: GDScript) -> void:
-	var signed_in: Dictionary = client.create_auth_session({
+	var unsupported_provider: Dictionary = client.create_auth_session({
 		"provider": "google",
-		"token": "google-id-token",
+		"token": "unsupported-token",
+	})
+	_expect_error_code(unsupported_provider, client_script.ERROR_INVALID_REQUEST, "create_auth_session rejects non-Firebase provider")
+	if client.get_recorded_requests().size() != 0:
+		_fail("Unsupported auth provider should be rejected before recording a request.")
+
+	var signed_in: Dictionary = client.create_auth_session({
+		"provider": "firebase",
+		"token": "firebase-id-token",
 		"deviceLabel": "Steam Deck",
 	})
 	_expect_equal(signed_in.get("accountId", ""), "acc_auth", "create_auth_session accountId")
 	_expect_equal(signed_in.get("accountSessionToken", ""), "pst_auth_session", "create_auth_session accountSessionToken")
-	_expect_equal(signed_in.get("linkedProvider", ""), "google", "create_auth_session linkedProvider")
+	_expect_equal(signed_in.get("linkedProvider", ""), "firebase", "create_auth_session linkedProvider")
 	_expect_equal(signed_in.get("isNewAccount", false), true, "create_auth_session isNewAccount")
 
 	var linked: Dictionary = client.create_auth_session({
-		"provider": "oidc_jwt",
-		"token": "oidc-token",
+		"provider": "firebase",
+		"token": "second-firebase-id-token",
 		"deviceLabel": "Laptop",
 	}, "pst_current_session", "acc_current")
 	_expect_equal(linked.get("wasProviderNewForAccount", false), true, "create_auth_session linked current provider")
@@ -217,20 +225,20 @@ func _check_auth_routes(client: Object, client_script: GDScript) -> void:
 	if provider_rows.size() != 1:
 		_fail("list_linked_providers should return one provider row.")
 	else:
-		_expect_equal(provider_rows[0].get("provider", ""), "google", "list_linked_providers provider")
+		_expect_equal(provider_rows[0].get("provider", ""), "firebase", "list_linked_providers provider")
 
 	var invalid_token: Dictionary = client.create_auth_session({
-		"provider": "google",
+		"provider": "firebase",
 		"token": "bad-token",
 	})
 	_expect_error_code(invalid_token, client_script.ERROR_PROVIDER_TOKEN_INVALID, "create_auth_session preserves provider_token_invalid")
 	var not_configured: Dictionary = client.create_auth_session({
-		"provider": "oidc_jwt",
+		"provider": "firebase",
 		"token": "missing-config-token",
 	})
 	_expect_error_code(not_configured, client_script.ERROR_AUTH_PROVIDER_NOT_CONFIGURED, "create_auth_session preserves auth_provider_not_configured")
 	var conflict: Dictionary = client.create_auth_session({
-		"provider": "google",
+		"provider": "firebase",
 		"token": "conflict-token",
 	}, "pst_current_session", "acc_current")
 	_expect_error_code(conflict, client_script.ERROR_ACCOUNT_AUTH_CONFLICT, "create_auth_session preserves account_auth_conflict")
@@ -239,7 +247,7 @@ func _check_auth_routes(client: Object, client_script: GDScript) -> void:
 	_expect_request(requests[0], "POST", "/api/v1/accounts/auth/session", false)
 	_expect_request(requests[1], "POST", "/api/v1/accounts/auth/session", true, "acc_current")
 	_expect_request(requests[2], "GET", "/api/v1/accounts/auth/providers", true, "acc_auth")
-	if JSON.stringify(requests).find("google-id-token") >= 0 or JSON.stringify(requests).find("oidc-token") >= 0:
+	if JSON.stringify(requests).find("firebase-id-token") >= 0 or JSON.stringify(requests).find("second-firebase-id-token") >= 0:
 		_fail("Recorded auth bridge requests should redact provider tokens.")
 	if JSON.stringify(requests).find("pst_auth_session") >= 0 or JSON.stringify(requests).find("pst_current_session") >= 0:
 		_fail("Recorded auth bridge requests should not expose account session tokens.")
@@ -363,22 +371,22 @@ func _seed_fixture_responses(client: Object) -> void:
 		"accountId": "acc_auth",
 		"accountSessionToken": "pst_auth_session",
 		"isNewAccount": true,
-		"linkedProvider": "google",
+		"linkedProvider": "firebase",
 		"wasProviderNewForAccount": true,
 	})
 	client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 200, {
 		"accountId": "acc_test",
 		"accountSessionToken": "pst_linked_session",
 		"isNewAccount": false,
-		"linkedProvider": "oidc_jwt",
+		"linkedProvider": "firebase",
 		"wasProviderNewForAccount": true,
 	})
 	client.register_fixture_response("GET", "/api/v1/accounts/auth/providers", 200, [
 		{
-			"provider": "google",
+			"provider": "firebase",
 			"display": {
-				"label": "Google",
-				"emailHint": "a***@gmail.com",
+				"label": "Firebase",
+				"emailHint": "a***@example.com",
 			},
 			"linkedAt": "2026-06-06T00:00:00Z",
 		},

@@ -35,7 +35,6 @@ What it proves:
 
 ## Auth Bridge
 
-- `auth_google_usage.gd` shows `authRequired` mode with `sign_in_with_google_id_token`.
-- `auth_oidc_usage.gd` shows generic `oidc_jwt` sign-in, provider linking, and linked provider listing.
+- `auth_firebase_usage.gd` shows `authRequired` mode with `sign_in_with_firebase_token`, Firebase provider linking, and linked provider listing.
 
-These examples assume provider trust is already configured for the Persistly project environment.
+These examples assume Firebase Auth Bridge is already configured for the Persistly project environment.

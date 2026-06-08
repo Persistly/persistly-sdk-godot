@@ -13,16 +13,16 @@ func configure(runtime_key: String, local_account_key: String) -> Dictionary:
 	})
 
 
-func sign_in_with_google(id_token: String, device_label: String = "") -> Dictionary:
-	return persistly.sign_in_with_google_id_token(id_token, {
+func sign_in_with_firebase(firebase_id_token: String, device_label: String = "") -> Dictionary:
+	return persistly.sign_in_with_firebase_token(firebase_id_token, {
 		"deviceLabel": device_label,
 	})
 
 
-func sign_in_with_oidc(jwt_token: String, device_label: String = "") -> Dictionary:
+func sign_in_with_provider(firebase_id_token: String, device_label: String = "") -> Dictionary:
 	return persistly.sign_in_with_provider({
-		"provider": "oidc_jwt",
-		"token": jwt_token,
+		"provider": "firebase",
+		"token": firebase_id_token,
 		"deviceLabel": device_label,
 	})
 

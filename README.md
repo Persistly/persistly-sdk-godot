@@ -100,22 +100,22 @@ Use `clear_local_account()` before switching players on the same device. It only
 
 ## Auth Bridge
 
-Auth Bridge exchanges a trusted provider token for a Persistly `accountId` and `accountSessionToken`. Provider tokens are only sent to `POST /api/v1/accounts/auth/session`; normal save/load/sync routes continue using the Persistly account session.
+Auth Bridge exchanges a Firebase ID token for a Persistly `accountId` and `accountSessionToken`. Firebase tokens are only sent to `POST /api/v1/accounts/auth/session`; normal save/load/sync routes continue using the Persistly account session. For Phase 1A, `sign_in_with_provider` accepts only `provider: "firebase"`.
 
 ```gdscript
-var signed_in := persistly.sign_in_with_google_id_token(google_id_token, {
+var signed_in := persistly.sign_in_with_firebase_token(firebase_id_token, {
 	"deviceLabel": OS.get_name(),
 })
 
-var oidc := persistly.sign_in_with_provider({
-	"provider": "oidc_jwt",
-	"token": oidc_jwt,
+var lower_level := persistly.sign_in_with_provider({
+	"provider": "firebase",
+	"token": firebase_id_token,
 	"deviceLabel": OS.get_name(),
 })
 
 var linked := persistly.link_provider({
-	"provider": "google",
-	"token": second_google_id_token,
+	"provider": "firebase",
+	"token": second_firebase_id_token,
 })
 
 var providers := persistly.list_linked_providers()
@@ -129,7 +129,7 @@ var signed_out := persistly.sign_out()
 - `templates/one-save` for idle, casual, and one-save games.
 - `templates/multi-slot` for manual saves, campaigns, and slot select screens.
 - `templates/account-slots` for games with sign-in or cross-device restore.
-- `templates/auth-required` for games where cloud sync waits for Google or OIDC/JWT sign-in.
+- `templates/auth-required` for games where cloud sync waits for Firebase sign-in.
 
 ## Runtime Surface
 
@@ -141,7 +141,7 @@ Facade methods:
 - `create_transfer_code`
 - `attach_with_transfer_code`
 - `get_account_session`
-- `sign_in_with_google_id_token`
+- `sign_in_with_firebase_token`
 - `sign_in_with_provider`
 - `link_provider`
 - `list_linked_providers`

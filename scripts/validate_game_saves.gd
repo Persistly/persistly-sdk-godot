@@ -80,7 +80,7 @@ func _check_account_first_facade_surface(game_saves_script: Script) -> void:
 		"create_transfer_code",
 		"attach_with_transfer_code",
 		"get_account_session",
-		"sign_in_with_google_id_token",
+		"sign_in_with_firebase_token",
 		"sign_in_with_provider",
 		"link_provider",
 		"list_linked_providers",
@@ -324,15 +324,15 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 		"accountId": "acc_auth",
 		"accountSessionToken": "pst_auth_session",
 		"isNewAccount": true,
-		"linkedProvider": "google",
+		"linkedProvider": "firebase",
 		"wasProviderNewForAccount": true,
 	})
 	persistly._client.register_fixture_response("GET", "/api/v1/accounts/auth/providers", 200, [
 		{
-			"provider": "google",
+			"provider": "firebase",
 			"display": {
-				"label": "Google",
-				"emailHint": "a***@gmail.com",
+				"label": "Firebase",
+				"emailHint": "a***@example.com",
 			},
 			"linkedAt": "2026-06-06T00:00:00Z",
 		},
@@ -343,17 +343,25 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 		"slot": SLOT,
 	})
 
-	var signed_in: Dictionary = persistly.sign_in_with_google_id_token("google-id-token", {
+	var unsupported_provider: Dictionary = persistly.sign_in_with_provider({
+		"provider": "google",
+		"token": "unsupported-token",
+	})
+	_expect_equal(unsupported_provider.get("error", {}).get("code", ""), "invalid_request", "sign_in_with_provider rejects non-Firebase provider")
+	if persistly._client.get_recorded_requests().size() != 0:
+		_fail("Unsupported auth provider should be rejected before recording a request.")
+
+	var signed_in: Dictionary = persistly.sign_in_with_firebase_token("firebase-id-token", {
 		"deviceLabel": "Steam Deck",
 	})
-	_expect_equal(signed_in.get("status", ""), "synced", "sign_in_with_google_id_token status")
-	_expect_equal(signed_in.get("accountId", ""), "acc_auth", "sign_in_with_google_id_token accountId")
+	_expect_equal(signed_in.get("status", ""), "synced", "sign_in_with_firebase_token status")
+	_expect_equal(signed_in.get("accountId", ""), "acc_auth", "sign_in_with_firebase_token accountId")
 	_expect_equal(persistly.get_account_session({"includeToken": true}).get("accountSessionToken", ""), "pst_auth_session", "sign-in stores accountSessionToken")
 
 	var providers: Dictionary = persistly.list_linked_providers()
 	var rows: Array = providers.get("providers", [])
-	if rows.size() != 1 or rows[0].get("provider", "") != "google":
-		_fail("list_linked_providers should return linked Google provider.")
+	if rows.size() != 1 or rows[0].get("provider", "") != "firebase":
+		_fail("list_linked_providers should return linked Firebase provider.")
 
 	var synced: Dictionary = persistly.force_sync_data({
 		"bypassCooldown": true,
@@ -366,7 +374,7 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 	_expect_equal(requests[2].get("path", ""), "/api/v1/accounts/acc_auth/slots", "signed-in slot create route")
 	_expect_has_account_id_header(requests[1])
 	_expect_has_account_session_header(requests[2])
-	if JSON.stringify(requests).find("google-id-token") >= 0 or JSON.stringify(requests).find("pst_auth_session") >= 0:
+	if JSON.stringify(requests).find("firebase-id-token") >= 0 or JSON.stringify(requests).find("pst_auth_session") >= 0:
 		_fail("Auth facade recorded requests should redact provider tokens and account sessions.")
 
 	var signed_out: Dictionary = persistly.sign_out()
@@ -400,7 +408,7 @@ func _check_auth_conflict_mapping(game_saves_script: Script) -> void:
 	})
 
 	var conflict: Dictionary = persistly.link_provider({
-		"provider": "google",
+		"provider": "firebase",
 		"token": "conflict-token",
 	})
 	_expect_equal(conflict.get("status", ""), "account_auth_conflict", "link_provider conflict status")

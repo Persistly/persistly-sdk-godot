@@ -153,12 +153,12 @@ func attach_with_transfer_code(transfer_code: String, options: Dictionary = {}) 
 	return _account_result(PersistlyGameSaveStatus.SYNCED, false)
 
 
-func sign_in_with_google_id_token(id_token: String, options := {}) -> Dictionary:
+func sign_in_with_firebase_token(firebase_id_token: String, options := {}) -> Dictionary:
 	if typeof(options) != TYPE_DICTIONARY:
-		return _error_result(ERROR_INVALID_REQUEST, "sign_in_with_google_id_token options must be a dictionary.")
+		return _error_result(ERROR_INVALID_REQUEST, "sign_in_with_firebase_token options must be a dictionary.")
 	var input := (options as Dictionary).duplicate(true)
-	input["provider"] = "google"
-	input["token"] = id_token
+	input["provider"] = "firebase"
+	input["token"] = firebase_id_token
 	return sign_in_with_provider(input)
 
 

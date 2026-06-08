@@ -453,8 +453,8 @@ func _normalize_auth_session_request(input: Dictionary, action: String) -> Dicti
 	var token := String(input.get("token", input.get("idToken", input.get("id_token", "")))).strip_edges()
 	if provider.is_empty():
 		return _error_result(ERROR_INVALID_REQUEST, action + " requires provider.")
-	if provider != "google" and provider != "oidc_jwt":
-		return _error_result(ERROR_INVALID_REQUEST, action + " provider must be google or oidc_jwt.")
+	if provider != "firebase":
+		return _error_result(ERROR_INVALID_REQUEST, action + " provider must be firebase.")
 	if token.is_empty():
 		return _error_result(ERROR_INVALID_REQUEST, action + " requires a provider token.")
 
@@ -813,6 +813,8 @@ func _normalize_auth_session_response(response: Dictionary) -> Dictionary:
 	normalized["accountId"] = String(response["accountId"])
 	normalized["accountSessionToken"] = String(response["accountSessionToken"])
 	normalized["linkedProvider"] = String(response["linkedProvider"])
+	if normalized["linkedProvider"] != "firebase":
+		return _error_result(ERROR_SERVER, "Persistly auth session response linkedProvider must be firebase.")
 	normalized["isNewAccount"] = bool(response.get("isNewAccount", false))
 	normalized["wasProviderNewForAccount"] = bool(response.get("wasProviderNewForAccount", false))
 	if response.has("syncPolicy"):
@@ -849,6 +851,8 @@ func _normalize_linked_providers_response(response: Variant) -> Dictionary:
 	for provider in providers:
 		if typeof(provider) != TYPE_DICTIONARY:
 			return _error_result(ERROR_SERVER, "Persistly linked provider row must be a dictionary.")
+		if String((provider as Dictionary).get("provider", "")) != "firebase":
+			return _error_result(ERROR_SERVER, "Persistly linked provider row must be firebase.")
 		normalized_providers.append((provider as Dictionary).duplicate(true))
 	return {
 		"providers": normalized_providers,

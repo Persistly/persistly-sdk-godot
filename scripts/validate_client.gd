@@ -69,6 +69,7 @@ func _check_versions(client_script: GDScript) -> void:
 	_expect_equal(client_script.ERROR_MONTHLY_QUOTA_EXCEEDED, "monthly_quota_exceeded", "ERROR_MONTHLY_QUOTA_EXCEEDED")
 	_expect_equal(client_script.ERROR_AUTH_REQUIRED, "auth_required", "ERROR_AUTH_REQUIRED")
 	_expect_equal(client_script.ERROR_PROVIDER_TOKEN_INVALID, "provider_token_invalid", "ERROR_PROVIDER_TOKEN_INVALID")
+	_expect_equal(client_script.ERROR_FIREBASE_PROJECT_MISMATCH, "firebase_project_mismatch", "ERROR_FIREBASE_PROJECT_MISMATCH")
 	_expect_equal(client_script.ERROR_AUTH_PROVIDER_NOT_CONFIGURED, "auth_provider_not_configured", "ERROR_AUTH_PROVIDER_NOT_CONFIGURED")
 	_expect_equal(client_script.ERROR_ACCOUNT_AUTH_CONFLICT, "account_auth_conflict", "ERROR_ACCOUNT_AUTH_CONFLICT")
 
@@ -232,6 +233,12 @@ func _check_auth_routes(client: Object, client_script: GDScript) -> void:
 		"token": "bad-token",
 	})
 	_expect_error_code(invalid_token, client_script.ERROR_PROVIDER_TOKEN_INVALID, "create_auth_session preserves provider_token_invalid")
+	var project_mismatch: Dictionary = client.create_auth_session({
+		"provider": "firebase",
+		"token": "wrong-project-token",
+	})
+	_expect_error_code(project_mismatch, client_script.ERROR_FIREBASE_PROJECT_MISMATCH, "create_auth_session preserves firebase_project_mismatch")
+	_expect_equal(project_mismatch.get("error", {}).get("message", ""), "This Firebase token belongs to a different Firebase project than the one configured for this environment.", "create_auth_session firebase_project_mismatch safe message")
 	var not_configured: Dictionary = client.create_auth_session({
 		"provider": "firebase",
 		"token": "missing-config-token",
@@ -249,6 +256,8 @@ func _check_auth_routes(client: Object, client_script: GDScript) -> void:
 	_expect_request(requests[2], "GET", "/api/v1/accounts/auth/providers", true, "acc_auth")
 	if JSON.stringify(requests).find("firebase-id-token") >= 0 or JSON.stringify(requests).find("second-firebase-id-token") >= 0:
 		_fail("Recorded auth bridge requests should redact provider tokens.")
+	if JSON.stringify(requests).find("wrong-project-token") >= 0:
+		_fail("Recorded auth bridge requests should not expose rejected provider tokens.")
 	if JSON.stringify(requests).find("pst_auth_session") >= 0 or JSON.stringify(requests).find("pst_current_session") >= 0:
 		_fail("Recorded auth bridge requests should not expose account session tokens.")
 	client.clear_recorded_requests()
@@ -395,6 +404,13 @@ func _seed_fixture_responses(client: Object) -> void:
 		"error": {
 			"code": "provider_token_invalid",
 			"message": "Provider token could not be verified.",
+		},
+	})
+	client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 401, {
+		"error": {
+			"code": "firebase_project_mismatch",
+			"message": "This Firebase token belongs to a different Firebase project than the one configured for this environment.",
+			"retryable": false,
 		},
 	})
 	client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 403, {

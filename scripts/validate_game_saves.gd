@@ -82,6 +82,7 @@ func _check_account_first_facade_surface(game_saves_script: Script) -> void:
 		"attach_with_transfer_code",
 		"get_account_session",
 		"sign_in_with_firebase_token",
+		"sign_in_with_supabase_token",
 		"sign_in_with_provider",
 		"link_provider",
 		"list_linked_providers",
@@ -329,6 +330,14 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 		"wasProviderNewForAccount": true,
 		"syncPolicy": SYNC_POLICY,
 	})
+	persistly._client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 200, {
+		"accountId": "acc_auth",
+		"accountSessionToken": "pst_auth_session",
+		"isNewAccount": false,
+		"linkedProvider": "supabase",
+		"wasProviderNewForAccount": true,
+		"syncPolicy": SYNC_POLICY,
+	})
 	persistly._client.register_fixture_response("GET", "/api/v1/accounts/auth/providers", 200, [
 		{
 			"provider": "firebase",
@@ -337,6 +346,14 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 				"emailHint": "a***@example.com",
 			},
 			"linkedAt": "2026-06-06T00:00:00Z",
+		},
+		{
+			"provider": "supabase",
+			"display": {
+				"label": "Supabase",
+				"emailHint": "s***@example.com",
+			},
+			"linkedAt": "2026-06-07T00:00:00Z",
 		},
 	])
 	persistly._client.register_fixture_response("POST", "/api/v1/accounts/acc_auth/slots", 201, {
@@ -349,7 +366,12 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 		"provider": "google",
 		"token": "unsupported-token",
 	})
-	_expect_equal(unsupported_provider.get("error", {}).get("code", ""), "invalid_request", "sign_in_with_provider rejects non-Firebase provider")
+	_expect_equal(unsupported_provider.get("error", {}).get("code", ""), "invalid_request", "sign_in_with_provider rejects direct Google provider")
+	var unsupported_oidc: Dictionary = persistly.sign_in_with_provider({
+		"provider": "oidc_jwt",
+		"token": "unsupported-oidc-token",
+	})
+	_expect_equal(unsupported_oidc.get("error", {}).get("code", ""), "invalid_request", "sign_in_with_provider rejects generic OIDC JWT provider")
 	if persistly._client.get_recorded_requests().size() != 0:
 		_fail("Unsupported auth provider should be rejected before recording a request.")
 
@@ -361,10 +383,18 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 	_expect_equal(persistly.get_account_session({"includeToken": true}).get("accountSessionToken", ""), "pst_auth_session", "sign-in stores accountSessionToken")
 	_expect_equal(int(persistly.sync_policy.get("forceSyncCooldownSeconds", 0)), int(SYNC_POLICY["forceSyncCooldownSeconds"]), "sign-in stores syncPolicy")
 
+	var linked_supabase: Dictionary = persistly.link_provider({
+		"provider": "supabase",
+		"token": "supabase-access-token",
+		"deviceLabel": "Laptop",
+	})
+	_expect_equal(linked_supabase.get("status", ""), "synced", "link_provider Supabase status")
+	_expect_equal(linked_supabase.get("linkedProvider", ""), "supabase", "link_provider Supabase linkedProvider")
+
 	var providers: Dictionary = persistly.list_linked_providers()
 	var rows: Array = providers.get("providers", [])
-	if rows.size() != 1 or rows[0].get("provider", "") != "firebase":
-		_fail("list_linked_providers should return linked Firebase provider.")
+	if rows.size() != 2 or rows[0].get("provider", "") != "firebase" or rows[1].get("provider", "") != "supabase":
+		_fail("list_linked_providers should return linked Firebase and Supabase providers.")
 
 	var synced: Dictionary = persistly.force_sync_data({
 		"bypassCooldown": true,
@@ -373,11 +403,14 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 
 	var requests: Array = persistly._client.get_recorded_requests()
 	_expect_equal(requests[0].get("path", ""), "/api/v1/accounts/auth/session", "sign-in auth route")
-	_expect_equal(requests[1].get("path", ""), "/api/v1/accounts/auth/providers", "list providers route")
-	_expect_equal(requests[2].get("path", ""), "/api/v1/accounts/acc_auth/slots", "signed-in slot create route")
+	_expect_equal(requests[1].get("path", ""), "/api/v1/accounts/auth/session", "link provider auth route")
+	_expect_equal(requests[2].get("path", ""), "/api/v1/accounts/auth/providers", "list providers route")
+	_expect_equal(requests[3].get("path", ""), "/api/v1/accounts/acc_auth/slots", "signed-in slot create route")
 	_expect_has_account_id_header(requests[1])
-	_expect_has_account_session_header(requests[2])
-	if JSON.stringify(requests).find("firebase-id-token") >= 0 or JSON.stringify(requests).find("pst_auth_session") >= 0:
+	_expect_has_account_session_header(requests[1])
+	_expect_has_account_id_header(requests[2])
+	_expect_has_account_session_header(requests[3])
+	if JSON.stringify(requests).find("firebase-id-token") >= 0 or JSON.stringify(requests).find("supabase-access-token") >= 0 or JSON.stringify(requests).find("pst_auth_session") >= 0:
 		_fail("Auth facade recorded requests should redact provider tokens and account sessions.")
 
 	var signed_out: Dictionary = persistly.sign_out()
@@ -430,6 +463,8 @@ func _check_auth_required_template_surface() -> void:
 	var service: Object = service_script.new()
 	if not service.has_method("sign_in_with_firebase_token"):
 		_fail("Auth-required template should prefer sign_in_with_firebase_token.")
+	if not service.has_method("sign_in_with_supabase_token"):
+		_fail("Auth-required template should expose sign_in_with_supabase_token.")
 	if service.has_method("sign_in_with_firebase"):
 		_fail("Auth-required template should not expose stale sign_in_with_firebase wrapper.")
 

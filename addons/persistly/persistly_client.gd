@@ -28,6 +28,11 @@ const ERROR_AUTH_PROVIDER_NOT_CONFIGURED := "auth_provider_not_configured"
 const ERROR_ACCOUNT_AUTH_CONFLICT := "account_auth_conflict"
 const ERROR_SERVER := "server_error"
 
+const AUTH_PROVIDERS := {
+	"firebase": true,
+	"supabase": true,
+}
+
 var _api_origin: String = PERSISTLY_API_ORIGIN
 var runtime_key: String
 var timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
@@ -454,8 +459,8 @@ func _normalize_auth_session_request(input: Dictionary, action: String) -> Dicti
 	var token := String(input.get("token", input.get("idToken", input.get("id_token", "")))).strip_edges()
 	if provider.is_empty():
 		return _error_result(ERROR_INVALID_REQUEST, action + " requires provider.")
-	if provider != "firebase":
-		return _error_result(ERROR_INVALID_REQUEST, action + " provider must be firebase.")
+	if not AUTH_PROVIDERS.has(provider):
+		return _error_result(ERROR_INVALID_REQUEST, action + " provider must be firebase or supabase.")
 	if token.is_empty():
 		return _error_result(ERROR_INVALID_REQUEST, action + " requires a provider token.")
 
@@ -814,8 +819,8 @@ func _normalize_auth_session_response(response: Dictionary) -> Dictionary:
 	normalized["accountId"] = String(response["accountId"])
 	normalized["accountSessionToken"] = String(response["accountSessionToken"])
 	normalized["linkedProvider"] = String(response["linkedProvider"])
-	if normalized["linkedProvider"] != "firebase":
-		return _error_result(ERROR_SERVER, "Persistly auth session response linkedProvider must be firebase.")
+	if not AUTH_PROVIDERS.has(normalized["linkedProvider"]):
+		return _error_result(ERROR_SERVER, "Persistly auth session response linkedProvider must be firebase or supabase.")
 	normalized["isNewAccount"] = bool(response.get("isNewAccount", false))
 	normalized["wasProviderNewForAccount"] = bool(response.get("wasProviderNewForAccount", false))
 	if response.has("syncPolicy"):
@@ -852,8 +857,8 @@ func _normalize_linked_providers_response(response: Variant) -> Dictionary:
 	for provider in providers:
 		if typeof(provider) != TYPE_DICTIONARY:
 			return _error_result(ERROR_SERVER, "Persistly linked provider row must be a dictionary.")
-		if String((provider as Dictionary).get("provider", "")) != "firebase":
-			return _error_result(ERROR_SERVER, "Persistly linked provider row must be firebase.")
+		if not AUTH_PROVIDERS.has(String((provider as Dictionary).get("provider", ""))):
+			return _error_result(ERROR_SERVER, "Persistly linked provider row must be firebase or supabase.")
 		normalized_providers.append((provider as Dictionary).duplicate(true))
 	return {
 		"providers": normalized_providers,

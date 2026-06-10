@@ -162,6 +162,15 @@ func sign_in_with_firebase_token(firebase_id_token: String, options := {}) -> Di
 	return sign_in_with_provider(input)
 
 
+func sign_in_with_supabase_token(supabase_access_token: String, options := {}) -> Dictionary:
+	if typeof(options) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "sign_in_with_supabase_token options must be a dictionary.")
+	var input := (options as Dictionary).duplicate(true)
+	input["provider"] = "supabase"
+	input["token"] = supabase_access_token
+	return sign_in_with_provider(input)
+
+
 func sign_in_with_provider(input: Dictionary) -> Dictionary:
 	var preflight := _validate_configured("sign_in_with_provider")
 	if not preflight.is_empty():

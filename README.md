@@ -100,21 +100,27 @@ Use `clear_local_account()` before switching players on the same device. It only
 
 ## Auth Bridge
 
-Auth Bridge exchanges a Firebase ID token for a Persistly `accountId` and `accountSessionToken`. Firebase tokens are only sent to `POST /api/v1/accounts/auth/session`; normal save/load/sync routes continue using the Persistly account session. Use `sign_in_with_firebase_token` for the Firebase flow.
+Auth Bridge exchanges a Firebase ID token or Supabase access token for a Persistly `accountId` and `accountSessionToken`. Provider tokens are only sent to `POST /api/v1/accounts/auth/session`; normal save/load/sync routes continue using the Persistly account session. Use `sign_in_with_firebase_token` for Firebase or `sign_in_with_supabase_token` for Supabase. Configure the Supabase provider in the Persistly dashboard with your Supabase project URL before using Supabase sign-in.
 
 ```gdscript
 var signed_in := persistly.sign_in_with_firebase_token(firebase_id_token, {
 	"deviceLabel": OS.get_name(),
 })
 
+var supabase_signed_in := persistly.sign_in_with_supabase_token(supabase_access_token, {
+	"deviceLabel": OS.get_name(),
+})
+
 var linked := persistly.link_provider({
-	"provider": "firebase",
-	"token": second_firebase_id_token,
+	"provider": "supabase",
+	"token": supabase_access_token,
 })
 
 var providers := persistly.list_linked_providers()
 var signed_out := persistly.sign_out()
 ```
+
+`sign_in_with_provider` and `link_provider` accept only `"firebase"` and `"supabase"` provider keys. Other provider keys are rejected before the SDK sends a request.
 
 `sign_out()` clears the local Persistly account session and slot cache for this device. It does not delete the remote account.
 
@@ -123,7 +129,7 @@ var signed_out := persistly.sign_out()
 - `templates/one-save` for idle, casual, and one-save games.
 - `templates/multi-slot` for manual saves, campaigns, and slot select screens.
 - `templates/account-slots` for games with sign-in or cross-device restore.
-- `templates/auth-required` for games where cloud sync waits for Firebase sign-in.
+- `templates/auth-required` for games where cloud sync waits for Firebase or Supabase sign-in.
 
 ## Runtime Surface
 
@@ -136,6 +142,7 @@ Facade methods:
 - `attach_with_transfer_code`
 - `get_account_session`
 - `sign_in_with_firebase_token`
+- `sign_in_with_supabase_token`
 - `sign_in_with_provider`
 - `link_provider`
 - `list_linked_providers`

@@ -29,6 +29,13 @@ func firebase_sign_in_complete(firebase_id_token: String) -> Dictionary:
 	return saves.sync_now()
 
 
+func supabase_sign_in_complete(supabase_access_token: String) -> Dictionary:
+	var signed_in := saves.sign_in_with_supabase_token(supabase_access_token, OS.get_name())
+	if signed_in.has("error"):
+		return signed_in
+	return saves.sync_now()
+
+
 func sign_out_pressed() -> Dictionary:
 	return saves.sign_out()
 

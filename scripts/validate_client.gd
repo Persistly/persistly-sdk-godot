@@ -200,7 +200,12 @@ func _check_auth_routes(client: Object, client_script: GDScript) -> void:
 		"provider": "google",
 		"token": "unsupported-token",
 	})
-	_expect_error_code(unsupported_provider, client_script.ERROR_INVALID_REQUEST, "create_auth_session rejects non-Firebase provider")
+	_expect_error_code(unsupported_provider, client_script.ERROR_INVALID_REQUEST, "create_auth_session rejects direct Google provider")
+	var unsupported_oidc: Dictionary = client.create_auth_session({
+		"provider": "oidc_jwt",
+		"token": "unsupported-oidc-token",
+	})
+	_expect_error_code(unsupported_oidc, client_script.ERROR_INVALID_REQUEST, "create_auth_session rejects generic OIDC JWT provider")
 	if client.get_recorded_requests().size() != 0:
 		_fail("Unsupported auth provider should be rejected before recording a request.")
 
@@ -215,18 +220,20 @@ func _check_auth_routes(client: Object, client_script: GDScript) -> void:
 	_expect_equal(signed_in.get("isNewAccount", false), true, "create_auth_session isNewAccount")
 
 	var linked: Dictionary = client.create_auth_session({
-		"provider": "firebase",
-		"token": "second-firebase-id-token",
+		"provider": "supabase",
+		"token": "supabase-access-token",
 		"deviceLabel": "Laptop",
 	}, "pst_current_session", "acc_current")
+	_expect_equal(linked.get("linkedProvider", ""), "supabase", "create_auth_session linked Supabase provider")
 	_expect_equal(linked.get("wasProviderNewForAccount", false), true, "create_auth_session linked current provider")
 
 	var providers: Dictionary = client.list_linked_providers("acc_auth", "pst_auth_session")
 	var provider_rows: Array = providers.get("providers", [])
-	if provider_rows.size() != 1:
-		_fail("list_linked_providers should return one provider row.")
+	if provider_rows.size() != 2:
+		_fail("list_linked_providers should return Firebase and Supabase provider rows.")
 	else:
 		_expect_equal(provider_rows[0].get("provider", ""), "firebase", "list_linked_providers provider")
+		_expect_equal(provider_rows[1].get("provider", ""), "supabase", "list_linked_providers Supabase provider")
 
 	var invalid_token: Dictionary = client.create_auth_session({
 		"provider": "firebase",
@@ -254,7 +261,7 @@ func _check_auth_routes(client: Object, client_script: GDScript) -> void:
 	_expect_request(requests[0], "POST", "/api/v1/accounts/auth/session", false)
 	_expect_request(requests[1], "POST", "/api/v1/accounts/auth/session", true, "acc_current")
 	_expect_request(requests[2], "GET", "/api/v1/accounts/auth/providers", true, "acc_auth")
-	if JSON.stringify(requests).find("firebase-id-token") >= 0 or JSON.stringify(requests).find("second-firebase-id-token") >= 0:
+	if JSON.stringify(requests).find("firebase-id-token") >= 0 or JSON.stringify(requests).find("supabase-access-token") >= 0:
 		_fail("Recorded auth bridge requests should redact provider tokens.")
 	if JSON.stringify(requests).find("wrong-project-token") >= 0:
 		_fail("Recorded auth bridge requests should not expose rejected provider tokens.")
@@ -387,7 +394,7 @@ func _seed_fixture_responses(client: Object) -> void:
 		"accountId": "acc_test",
 		"accountSessionToken": "pst_linked_session",
 		"isNewAccount": false,
-		"linkedProvider": "firebase",
+		"linkedProvider": "supabase",
 		"wasProviderNewForAccount": true,
 	})
 	client.register_fixture_response("GET", "/api/v1/accounts/auth/providers", 200, [
@@ -398,6 +405,14 @@ func _seed_fixture_responses(client: Object) -> void:
 				"emailHint": "a***@example.com",
 			},
 			"linkedAt": "2026-06-06T00:00:00Z",
+		},
+		{
+			"provider": "supabase",
+			"display": {
+				"label": "Supabase",
+				"emailHint": "s***@example.com",
+			},
+			"linkedAt": "2026-06-07T00:00:00Z",
 		},
 	])
 	client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 401, {

@@ -35,7 +35,7 @@ Use `clear_local_account()` to wipe the local account session plus all local slo
 
 Use `create_account()` for explicit account-first flows, or `attach_account(accountId, accountSessionToken)` to load an existing Persistly account into empty local state.
 
-Use `accountMode: "authRequired"` when your game allows local saves but requires Firebase sign-in before cloud sync. Call `sign_in_with_firebase_token()` to exchange a Firebase ID token for the Persistly account session used by normal save and sync calls.
+Use `accountMode: "authRequired"` when your game allows local saves but requires Firebase or Supabase sign-in before cloud sync. Call `sign_in_with_firebase_token()` or `sign_in_with_supabase_token()` to exchange a provider token for the Persistly account session used by normal save and sync calls. Configure Supabase in the Persistly dashboard with the Supabase project URL. Provider tokens are not sent on normal save/load/sync routes.
 
 Use `create_transfer_code()` on a device that already has a local account session, and `attach_with_transfer_code(code)` on an empty second device for short-lived anonymous save transfer. Transfer codes are single-use and should be shown to the player without logging them.
 

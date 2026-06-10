@@ -23,10 +23,28 @@ func sign_in_with_firebase_token(firebase_id_token: String) -> Dictionary:
 	return persistly.force_sync_data({ "bypassCooldown": true })
 
 
+func sign_in_with_supabase_token(supabase_access_token: String) -> Dictionary:
+	var signed_in := persistly.sign_in_with_supabase_token(supabase_access_token, {
+		"deviceLabel": OS.get_name(),
+	})
+	if signed_in.has("error"):
+		return signed_in
+
+	return persistly.force_sync_data({ "bypassCooldown": true })
+
+
 func link_firebase_to_current_account(firebase_id_token: String) -> Dictionary:
 	return persistly.link_provider({
 		"provider": "firebase",
 		"token": firebase_id_token,
+		"deviceLabel": OS.get_name(),
+	})
+
+
+func link_supabase_to_current_account(supabase_access_token: String) -> Dictionary:
+	return persistly.link_provider({
+		"provider": "supabase",
+		"token": supabase_access_token,
 		"deviceLabel": OS.get_name(),
 	})
 

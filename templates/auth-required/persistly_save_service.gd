@@ -19,12 +19,14 @@ func sign_in_with_firebase_token(firebase_id_token: String, device_label: String
 	})
 
 
-func sign_in_with_provider(firebase_id_token: String, device_label: String = "") -> Dictionary:
-	return persistly.sign_in_with_provider({
-		"provider": "firebase",
-		"token": firebase_id_token,
+func sign_in_with_supabase_token(supabase_access_token: String, device_label: String = "") -> Dictionary:
+	return persistly.sign_in_with_supabase_token(supabase_access_token, {
 		"deviceLabel": device_label,
 	})
+
+
+func sign_in_with_provider(input: Dictionary) -> Dictionary:
+	return persistly.sign_in_with_provider(input)
 
 
 func link_provider(input: Dictionary) -> Dictionary:

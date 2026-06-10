@@ -35,6 +35,6 @@ What it proves:
 
 ## Auth Bridge
 
-- `auth_firebase_usage.gd` shows `authRequired` mode with `sign_in_with_firebase_token`, Firebase provider linking, and linked provider listing.
+- `auth_firebase_usage.gd` shows `authRequired` mode with `sign_in_with_firebase_token`, `sign_in_with_supabase_token`, provider linking, and linked provider listing.
 
-These examples assume Firebase Auth Bridge is already configured for the Persistly project environment.
+These examples assume Firebase or Supabase Auth Bridge is already configured for the Persistly project environment.

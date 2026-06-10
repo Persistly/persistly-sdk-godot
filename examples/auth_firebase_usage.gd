@@ -13,7 +13,7 @@ func _ready() -> void:
 	})
 
 
-func sign_in_with_firebase(firebase_id_token: String) -> Dictionary:
+func sign_in_with_firebase_token(firebase_id_token: String) -> Dictionary:
 	var signed_in := persistly.sign_in_with_firebase_token(firebase_id_token, {
 		"deviceLabel": OS.get_name(),
 	})

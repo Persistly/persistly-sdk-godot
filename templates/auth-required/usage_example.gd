@@ -23,14 +23,10 @@ func sync_before_sign_in() -> Dictionary:
 
 
 func firebase_sign_in_complete(firebase_id_token: String) -> Dictionary:
-	var signed_in := saves.sign_in_with_firebase(firebase_id_token, OS.get_name())
+	var signed_in := saves.sign_in_with_firebase_token(firebase_id_token, OS.get_name())
 	if signed_in.has("error"):
 		return signed_in
 	return saves.sync_now()
-
-
-func firebase_provider_sign_in_complete(firebase_id_token: String) -> Dictionary:
-	return saves.sign_in_with_provider(firebase_id_token, OS.get_name())
 
 
 func sign_out_pressed() -> Dictionary:

@@ -13,7 +13,7 @@ func configure(runtime_key: String, local_account_key: String) -> Dictionary:
 	})
 
 
-func sign_in_with_firebase(firebase_id_token: String, device_label: String = "") -> Dictionary:
+func sign_in_with_firebase_token(firebase_id_token: String, device_label: String = "") -> Dictionary:
 	return persistly.sign_in_with_firebase_token(firebase_id_token, {
 		"deviceLabel": device_label,
 	})

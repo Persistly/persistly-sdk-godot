@@ -100,16 +100,10 @@ Use `clear_local_account()` before switching players on the same device. It only
 
 ## Auth Bridge
 
-Auth Bridge exchanges a Firebase ID token for a Persistly `accountId` and `accountSessionToken`. Firebase tokens are only sent to `POST /api/v1/accounts/auth/session`; normal save/load/sync routes continue using the Persistly account session. For Phase 1A, `sign_in_with_provider` accepts only `provider: "firebase"`.
+Auth Bridge exchanges a Firebase ID token for a Persistly `accountId` and `accountSessionToken`. Firebase tokens are only sent to `POST /api/v1/accounts/auth/session`; normal save/load/sync routes continue using the Persistly account session. Use `sign_in_with_firebase_token` for the Firebase flow.
 
 ```gdscript
 var signed_in := persistly.sign_in_with_firebase_token(firebase_id_token, {
-	"deviceLabel": OS.get_name(),
-})
-
-var lower_level := persistly.sign_in_with_provider({
-	"provider": "firebase",
-	"token": firebase_id_token,
 	"deviceLabel": OS.get_name(),
 })
 

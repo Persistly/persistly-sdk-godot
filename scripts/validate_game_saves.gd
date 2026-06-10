@@ -55,6 +55,7 @@ func _initialize() -> void:
 	_check_auth_required_mode(game_saves_script)
 	_check_auth_facade_session_flow(game_saves_script)
 	_check_auth_conflict_mapping(game_saves_script)
+	_check_auth_required_template_surface()
 	_check_clear_and_delete_boundaries(game_saves_script)
 	_check_reserved_slot_info_rejected(game_saves_script)
 	_finish()
@@ -326,6 +327,7 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 		"isNewAccount": true,
 		"linkedProvider": "firebase",
 		"wasProviderNewForAccount": true,
+		"syncPolicy": SYNC_POLICY,
 	})
 	persistly._client.register_fixture_response("GET", "/api/v1/accounts/auth/providers", 200, [
 		{
@@ -357,6 +359,7 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 	_expect_equal(signed_in.get("status", ""), "synced", "sign_in_with_firebase_token status")
 	_expect_equal(signed_in.get("accountId", ""), "acc_auth", "sign_in_with_firebase_token accountId")
 	_expect_equal(persistly.get_account_session({"includeToken": true}).get("accountSessionToken", ""), "pst_auth_session", "sign-in stores accountSessionToken")
+	_expect_equal(int(persistly.sync_policy.get("forceSyncCooldownSeconds", 0)), int(SYNC_POLICY["forceSyncCooldownSeconds"]), "sign-in stores syncPolicy")
 
 	var providers: Dictionary = persistly.list_linked_providers()
 	var rows: Array = providers.get("providers", [])
@@ -417,6 +420,18 @@ func _check_auth_conflict_mapping(game_saves_script: Script) -> void:
 	var request: Dictionary = persistly._client.get_recorded_requests()[0]
 	_expect_has_account_id_header(request)
 	_expect_has_account_session_header(request)
+
+
+func _check_auth_required_template_surface() -> void:
+	var service_script := load("res://templates/auth-required/persistly_save_service.gd")
+	if service_script == null or not service_script.can_instantiate():
+		_fail("Auth-required template service should load.")
+		return
+	var service: Object = service_script.new()
+	if not service.has_method("sign_in_with_firebase_token"):
+		_fail("Auth-required template should prefer sign_in_with_firebase_token.")
+	if service.has_method("sign_in_with_firebase"):
+		_fail("Auth-required template should not expose stale sign_in_with_firebase wrapper.")
 
 
 func _check_clear_and_delete_boundaries(game_saves_script: Script) -> void:

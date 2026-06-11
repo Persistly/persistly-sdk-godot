@@ -25,6 +25,12 @@ func sign_in_with_supabase_token(supabase_access_token: String, device_label: St
 	})
 
 
+func sign_in_with_auth0_token(auth0_token: String, device_label: String = "") -> Dictionary:
+	return persistly.sign_in_with_auth0_token(auth0_token, {
+		"deviceLabel": device_label,
+	})
+
+
 func sign_in_with_provider(input: Dictionary) -> Dictionary:
 	return persistly.sign_in_with_provider(input)
 

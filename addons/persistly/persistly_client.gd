@@ -24,6 +24,8 @@ const ERROR_PAYLOAD_TOO_LARGE := "payload_too_large"
 const ERROR_AUTH_REQUIRED := "auth_required"
 const ERROR_PROVIDER_TOKEN_INVALID := "provider_token_invalid"
 const ERROR_FIREBASE_PROJECT_MISMATCH := "firebase_project_mismatch"
+const ERROR_AUTH0_ISSUER_MISMATCH := "auth0_issuer_mismatch"
+const ERROR_AUTH0_AUDIENCE_MISMATCH := "auth0_audience_mismatch"
 const ERROR_AUTH_PROVIDER_NOT_CONFIGURED := "auth_provider_not_configured"
 const ERROR_ACCOUNT_AUTH_CONFLICT := "account_auth_conflict"
 const ERROR_SERVER := "server_error"
@@ -31,6 +33,7 @@ const ERROR_SERVER := "server_error"
 const AUTH_PROVIDERS := {
 	"firebase": true,
 	"supabase": true,
+	"auth0": true,
 }
 
 var _api_origin: String = PERSISTLY_API_ORIGIN
@@ -460,7 +463,7 @@ func _normalize_auth_session_request(input: Dictionary, action: String) -> Dicti
 	if provider.is_empty():
 		return _error_result(ERROR_INVALID_REQUEST, action + " requires provider.")
 	if not AUTH_PROVIDERS.has(provider):
-		return _error_result(ERROR_INVALID_REQUEST, action + " provider must be firebase or supabase.")
+		return _error_result(ERROR_INVALID_REQUEST, action + " provider must be firebase, supabase, or auth0.")
 	if token.is_empty():
 		return _error_result(ERROR_INVALID_REQUEST, action + " requires a provider token.")
 
@@ -820,7 +823,7 @@ func _normalize_auth_session_response(response: Dictionary) -> Dictionary:
 	normalized["accountSessionToken"] = String(response["accountSessionToken"])
 	normalized["linkedProvider"] = String(response["linkedProvider"])
 	if not AUTH_PROVIDERS.has(normalized["linkedProvider"]):
-		return _error_result(ERROR_SERVER, "Persistly auth session response linkedProvider must be firebase or supabase.")
+		return _error_result(ERROR_SERVER, "Persistly auth session response linkedProvider must be firebase, supabase, or auth0.")
 	normalized["isNewAccount"] = bool(response.get("isNewAccount", false))
 	normalized["wasProviderNewForAccount"] = bool(response.get("wasProviderNewForAccount", false))
 	if response.has("syncPolicy"):
@@ -858,7 +861,7 @@ func _normalize_linked_providers_response(response: Variant) -> Dictionary:
 		if typeof(provider) != TYPE_DICTIONARY:
 			return _error_result(ERROR_SERVER, "Persistly linked provider row must be a dictionary.")
 		if not AUTH_PROVIDERS.has(String((provider as Dictionary).get("provider", ""))):
-			return _error_result(ERROR_SERVER, "Persistly linked provider row must be firebase or supabase.")
+			return _error_result(ERROR_SERVER, "Persistly linked provider row must be firebase, supabase, or auth0.")
 		normalized_providers.append((provider as Dictionary).duplicate(true))
 	return {
 		"providers": normalized_providers,

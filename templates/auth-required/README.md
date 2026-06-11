@@ -1,6 +1,6 @@
 # Auth-Required Godot Template
 
-Use this template when your game requires Firebase or Supabase sign-in before cloud sync. Local saves still work before sign-in, but `force_sync_data`, `force_sync`, and due-sync calls return `auth_required` until a Firebase ID token or Supabase access token is exchanged for a Persistly account session.
+Use this template when your game requires Firebase, Supabase, or Auth0 sign-in before cloud sync. Local saves still work before sign-in, but `force_sync_data`, `force_sync`, and due-sync calls return `auth_required` until a provider token is exchanged for a Persistly account session.
 
 Provider tokens are sent only to the Auth Bridge session endpoint. Normal save/load/sync calls continue to use the returned Persistly `accountId` and `accountSessionToken`.
 

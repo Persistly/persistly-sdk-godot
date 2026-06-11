@@ -83,6 +83,7 @@ func _check_account_first_facade_surface(game_saves_script: Script) -> void:
 		"get_account_session",
 		"sign_in_with_firebase_token",
 		"sign_in_with_supabase_token",
+		"sign_in_with_auth0_token",
 		"sign_in_with_provider",
 		"link_provider",
 		"list_linked_providers",
@@ -338,6 +339,14 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 		"wasProviderNewForAccount": true,
 		"syncPolicy": SYNC_POLICY,
 	})
+	persistly._client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 200, {
+		"accountId": "acc_auth",
+		"accountSessionToken": "pst_auth_session",
+		"isNewAccount": false,
+		"linkedProvider": "auth0",
+		"wasProviderNewForAccount": true,
+		"syncPolicy": SYNC_POLICY,
+	})
 	persistly._client.register_fixture_response("GET", "/api/v1/accounts/auth/providers", 200, [
 		{
 			"provider": "firebase",
@@ -354,6 +363,14 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 				"emailHint": "s***@example.com",
 			},
 			"linkedAt": "2026-06-07T00:00:00Z",
+		},
+		{
+			"provider": "auth0",
+			"display": {
+				"label": "Auth0",
+				"emailHint": "u***@example.com",
+			},
+			"linkedAt": "2026-06-08T00:00:00Z",
 		},
 	])
 	persistly._client.register_fixture_response("POST", "/api/v1/accounts/acc_auth/slots", 201, {
@@ -391,10 +408,16 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 	_expect_equal(linked_supabase.get("status", ""), "synced", "link_provider Supabase status")
 	_expect_equal(linked_supabase.get("linkedProvider", ""), "supabase", "link_provider Supabase linkedProvider")
 
+	var linked_auth0: Dictionary = persistly.sign_in_with_auth0_token("auth0-token", {
+		"deviceLabel": "Desktop",
+	})
+	_expect_equal(linked_auth0.get("status", ""), "synced", "sign_in_with_auth0_token status")
+	_expect_equal(linked_auth0.get("linkedProvider", ""), "auth0", "sign_in_with_auth0_token linkedProvider")
+
 	var providers: Dictionary = persistly.list_linked_providers()
 	var rows: Array = providers.get("providers", [])
-	if rows.size() != 2 or rows[0].get("provider", "") != "firebase" or rows[1].get("provider", "") != "supabase":
-		_fail("list_linked_providers should return linked Firebase and Supabase providers.")
+	if rows.size() != 3 or rows[0].get("provider", "") != "firebase" or rows[1].get("provider", "") != "supabase" or rows[2].get("provider", "") != "auth0":
+		_fail("list_linked_providers should return linked Firebase, Supabase, and Auth0 providers.")
 
 	var synced: Dictionary = persistly.force_sync_data({
 		"bypassCooldown": true,
@@ -404,13 +427,15 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 	var requests: Array = persistly._client.get_recorded_requests()
 	_expect_equal(requests[0].get("path", ""), "/api/v1/accounts/auth/session", "sign-in auth route")
 	_expect_equal(requests[1].get("path", ""), "/api/v1/accounts/auth/session", "link provider auth route")
-	_expect_equal(requests[2].get("path", ""), "/api/v1/accounts/auth/providers", "list providers route")
-	_expect_equal(requests[3].get("path", ""), "/api/v1/accounts/acc_auth/slots", "signed-in slot create route")
+	_expect_equal(requests[2].get("path", ""), "/api/v1/accounts/auth/session", "Auth0 sign-in auth route")
+	_expect_equal(requests[3].get("path", ""), "/api/v1/accounts/auth/providers", "list providers route")
+	_expect_equal(requests[4].get("path", ""), "/api/v1/accounts/acc_auth/slots", "signed-in slot create route")
 	_expect_has_account_id_header(requests[1])
 	_expect_has_account_session_header(requests[1])
 	_expect_has_account_id_header(requests[2])
-	_expect_has_account_session_header(requests[3])
-	if JSON.stringify(requests).find("firebase-id-token") >= 0 or JSON.stringify(requests).find("supabase-access-token") >= 0 or JSON.stringify(requests).find("pst_auth_session") >= 0:
+	_expect_has_account_id_header(requests[3])
+	_expect_has_account_session_header(requests[4])
+	if JSON.stringify(requests).find("firebase-id-token") >= 0 or JSON.stringify(requests).find("supabase-access-token") >= 0 or JSON.stringify(requests).find("auth0-token") >= 0 or JSON.stringify(requests).find("pst_auth_session") >= 0:
 		_fail("Auth facade recorded requests should redact provider tokens and account sessions.")
 
 	var signed_out: Dictionary = persistly.sign_out()
@@ -465,6 +490,8 @@ func _check_auth_required_template_surface() -> void:
 		_fail("Auth-required template should prefer sign_in_with_firebase_token.")
 	if not service.has_method("sign_in_with_supabase_token"):
 		_fail("Auth-required template should expose sign_in_with_supabase_token.")
+	if not service.has_method("sign_in_with_auth0_token"):
+		_fail("Auth-required template should expose sign_in_with_auth0_token.")
 	if service.has_method("sign_in_with_firebase"):
 		_fail("Auth-required template should not expose stale sign_in_with_firebase wrapper.")
 

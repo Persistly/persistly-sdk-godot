@@ -100,7 +100,7 @@ Use `clear_local_account()` before switching players on the same device. It only
 
 ## Auth Bridge
 
-Auth Bridge exchanges a Firebase ID token or Supabase access token for a Persistly `accountId` and `accountSessionToken`. Provider tokens are only sent to `POST /api/v1/accounts/auth/session`; normal save/load/sync routes continue using the Persistly account session. Use `sign_in_with_firebase_token` for Firebase or `sign_in_with_supabase_token` for Supabase. Configure the Supabase provider in the Persistly dashboard with your Supabase project URL before using Supabase sign-in.
+Auth Bridge exchanges a Firebase ID token, Supabase access token, or Auth0 token for a Persistly `accountId` and `accountSessionToken`. Provider tokens are only sent to `POST /api/v1/accounts/auth/session`; normal save/load/sync routes continue using the Persistly account session. Use `sign_in_with_firebase_token` for Firebase, `sign_in_with_supabase_token` for Supabase, or `sign_in_with_auth0_token` for Auth0. Configure each provider in the Persistly dashboard before using provider sign-in.
 
 ```gdscript
 var signed_in := persistly.sign_in_with_firebase_token(firebase_id_token, {
@@ -129,7 +129,7 @@ var signed_out := persistly.sign_out()
 - `templates/one-save` for idle, casual, and one-save games.
 - `templates/multi-slot` for manual saves, campaigns, and slot select screens.
 - `templates/account-slots` for games with sign-in or cross-device restore.
-- `templates/auth-required` for games where cloud sync waits for Firebase or Supabase sign-in.
+- `templates/auth-required` for games where cloud sync waits for Firebase, Supabase, or Auth0 sign-in.
 
 ## Runtime Surface
 

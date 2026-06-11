@@ -227,13 +227,21 @@ func _check_auth_routes(client: Object, client_script: GDScript) -> void:
 	_expect_equal(linked.get("linkedProvider", ""), "supabase", "create_auth_session linked Supabase provider")
 	_expect_equal(linked.get("wasProviderNewForAccount", false), true, "create_auth_session linked current provider")
 
+	var linked_auth0: Dictionary = client.create_auth_session({
+		"provider": "auth0",
+		"token": "auth0-token",
+		"deviceLabel": "Desktop",
+	}, "pst_current_session", "acc_current")
+	_expect_equal(linked_auth0.get("linkedProvider", ""), "auth0", "create_auth_session linked Auth0 provider")
+
 	var providers: Dictionary = client.list_linked_providers("acc_auth", "pst_auth_session")
 	var provider_rows: Array = providers.get("providers", [])
-	if provider_rows.size() != 2:
-		_fail("list_linked_providers should return Firebase and Supabase provider rows.")
+	if provider_rows.size() != 3:
+		_fail("list_linked_providers should return Firebase, Supabase, and Auth0 provider rows.")
 	else:
 		_expect_equal(provider_rows[0].get("provider", ""), "firebase", "list_linked_providers provider")
 		_expect_equal(provider_rows[1].get("provider", ""), "supabase", "list_linked_providers Supabase provider")
+		_expect_equal(provider_rows[2].get("provider", ""), "auth0", "list_linked_providers Auth0 provider")
 
 	var invalid_token: Dictionary = client.create_auth_session({
 		"provider": "firebase",
@@ -260,8 +268,9 @@ func _check_auth_routes(client: Object, client_script: GDScript) -> void:
 	var requests: Array = client.get_recorded_requests()
 	_expect_request(requests[0], "POST", "/api/v1/accounts/auth/session", false)
 	_expect_request(requests[1], "POST", "/api/v1/accounts/auth/session", true, "acc_current")
-	_expect_request(requests[2], "GET", "/api/v1/accounts/auth/providers", true, "acc_auth")
-	if JSON.stringify(requests).find("firebase-id-token") >= 0 or JSON.stringify(requests).find("supabase-access-token") >= 0:
+	_expect_request(requests[2], "POST", "/api/v1/accounts/auth/session", true, "acc_current")
+	_expect_request(requests[3], "GET", "/api/v1/accounts/auth/providers", true, "acc_auth")
+	if JSON.stringify(requests).find("firebase-id-token") >= 0 or JSON.stringify(requests).find("supabase-access-token") >= 0 or JSON.stringify(requests).find("auth0-token") >= 0:
 		_fail("Recorded auth bridge requests should redact provider tokens.")
 	if JSON.stringify(requests).find("wrong-project-token") >= 0:
 		_fail("Recorded auth bridge requests should not expose rejected provider tokens.")
@@ -397,6 +406,13 @@ func _seed_fixture_responses(client: Object) -> void:
 		"linkedProvider": "supabase",
 		"wasProviderNewForAccount": true,
 	})
+	client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 200, {
+		"accountId": "acc_test",
+		"accountSessionToken": "pst_linked_auth0_session",
+		"isNewAccount": false,
+		"linkedProvider": "auth0",
+		"wasProviderNewForAccount": true,
+	})
 	client.register_fixture_response("GET", "/api/v1/accounts/auth/providers", 200, [
 		{
 			"provider": "firebase",
@@ -413,6 +429,14 @@ func _seed_fixture_responses(client: Object) -> void:
 				"emailHint": "s***@example.com",
 			},
 			"linkedAt": "2026-06-07T00:00:00Z",
+		},
+		{
+			"provider": "auth0",
+			"display": {
+				"label": "Auth0",
+				"emailHint": "u***@example.com",
+			},
+			"linkedAt": "2026-06-08T00:00:00Z",
 		},
 	])
 	client.register_fixture_response("POST", "/api/v1/accounts/auth/session", 401, {

@@ -120,7 +120,7 @@ var providers := persistly.list_linked_providers()
 var signed_out := persistly.sign_out()
 ```
 
-`sign_in_with_provider` and `link_provider` accept only `"firebase"` and `"supabase"` provider keys. Other provider keys are rejected before the SDK sends a request.
+`sign_in_with_provider` and `link_provider` accept only `"firebase"`, `"supabase"`, and `"auth0"` provider keys. Other provider keys are rejected before the SDK sends a request.
 
 `sign_out()` clears the local Persistly account session and slot cache for this device. It does not delete the remote account.
 
@@ -143,6 +143,7 @@ Facade methods:
 - `get_account_session`
 - `sign_in_with_firebase_token`
 - `sign_in_with_supabase_token`
+- `sign_in_with_auth0_token`
 - `sign_in_with_provider`
 - `link_provider`
 - `list_linked_providers`

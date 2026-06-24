@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0
+
+- Adds Auth Bridge helpers for Firebase Auth, Supabase Auth, and Auth0.
+- Adds auth-required cloud-sync flows where local saves continue before sign-in and remote sync waits for a provider token exchange.
+- Adds provider linking and linked-provider listing helpers for account-bound games.
+- Adds provider-specific validation coverage and examples while keeping normal save/load/sync calls on Persistly account sessions.
+
 ## 1.0.0
 
 - First stable Godot SDK release for Persistly cloud save sync.

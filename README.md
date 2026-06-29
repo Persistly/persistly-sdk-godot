@@ -51,7 +51,7 @@ var synced := persistly.force_sync_data({"bypassCooldown": true})
 
 `save_data` writes local data immediately to the default `autosave` slot. The first `force_sync_data`, `sync_due_slots`, or `sync_due` call creates the remote Persistly account and matching slot if needed. Use `save_slot`, `load_slot`, and `force_sync` for multiple named slots.
 
-`anonymousFirst` is the default account mode. Use `authRequired` when your game requires sign-in before cloud sync:
+`anonymousFirst` is the default Persistly account mode. It is not Firebase Anonymous Auth, Supabase anonymous sign-in, or an Auth0 guest user. Use `authRequired` when your game requires sign-in before cloud sync:
 
 ```gdscript
 persistly.configure({
@@ -100,7 +100,7 @@ Use `clear_local_account()` before switching players on the same device. It only
 
 ## Auth Bridge
 
-Auth Bridge exchanges a Firebase ID token, Supabase access token, or Auth0 token for a Persistly `accountId` and `accountSessionToken`. Provider tokens are only sent to `POST /api/v1/accounts/auth/session`; normal save/load/sync routes continue using the Persistly account session. Use `sign_in_with_firebase_token` for Firebase, `sign_in_with_supabase_token` for Supabase, or `sign_in_with_auth0_token` for Auth0. Configure each provider in the Persistly dashboard before using provider sign-in.
+Auth Bridge exchanges a Firebase ID token, Supabase access token, or Auth0 token from your game's auth SDK for a Persistly `accountId` and `accountSessionToken`. Provider tokens are only sent to sign-in/connect exchange routes; normal save/load/sync routes continue using the Persistly account session. Use `sign_in_with_firebase_token` for Firebase, `sign_in_with_supabase_token` for Supabase, or `sign_in_with_auth0_token` for games that require sign-in before cloud sync. Use `connect_with_firebase_token`, `connect_with_supabase_token`, or `connect_with_auth0_token` when a player already has anonymous local/cloud progress and later connects a provider. Configure each provider in the Persistly dashboard before using provider sign-in.
 
 ```gdscript
 var signed_in := persistly.sign_in_with_firebase_token(firebase_id_token, {
@@ -116,11 +116,17 @@ var linked := persistly.link_provider({
 	"token": supabase_access_token,
 })
 
+var connected := persistly.connect_with_firebase_token(firebase_id_token, {
+	"deviceLabel": OS.get_name(),
+})
+
 var providers := persistly.list_linked_providers()
 var signed_out := persistly.sign_out()
 ```
 
-`sign_in_with_provider` and `link_provider` accept only `"firebase"`, `"supabase"`, and `"auth0"` provider keys. Other provider keys are rejected before the SDK sends a request.
+If the provider is already linked to another Persistly account, connect-later returns `account_auth_conflict` and preserves the current local anonymous progress. Do not automatically clear local data or switch accounts; ask the player first.
+
+`sign_in_with_provider`, `connect_provider`, and `link_provider` accept only `"firebase"`, `"supabase"`, and `"auth0"` provider keys. Other provider keys are rejected before the SDK sends a request.
 
 `sign_out()` clears the local Persistly account session and slot cache for this device. It does not delete the remote account.
 
@@ -130,6 +136,7 @@ var signed_out := persistly.sign_out()
 - `templates/multi-slot` for manual saves, campaigns, and slot select screens.
 - `templates/account-slots` for games with sign-in or cross-device restore.
 - `templates/auth-required` for games where cloud sync waits for Firebase, Supabase, or Auth0 sign-in.
+- `templates/anonymous-first-connect-later` for games that start anonymous, save first, and connect Firebase, Supabase, or Auth0 later.
 
 ## Runtime Surface
 
@@ -145,6 +152,10 @@ Facade methods:
 - `sign_in_with_supabase_token`
 - `sign_in_with_auth0_token`
 - `sign_in_with_provider`
+- `connect_with_firebase_token`
+- `connect_with_supabase_token`
+- `connect_with_auth0_token`
+- `connect_provider`
 - `link_provider`
 - `list_linked_providers`
 - `sign_out`

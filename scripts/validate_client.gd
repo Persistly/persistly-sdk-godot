@@ -61,7 +61,7 @@ func _initialize() -> void:
 
 
 func _check_versions(client_script: GDScript) -> void:
-	_expect_equal(client_script.SDK_VERSION, "1.1.0", "SDK_VERSION")
+	_expect_equal(client_script.SDK_VERSION, "1.2.0", "SDK_VERSION")
 	_expect_equal(client_script.BUNDLE_VERSION, "persistly-contract-v0.4.0", "BUNDLE_VERSION")
 	_expect_equal(client_script.ERROR_ACCOUNT_DELETED, "account_deleted", "ERROR_ACCOUNT_DELETED")
 	_expect_equal(client_script.ERROR_SLOT_DELETED, "slot_deleted", "ERROR_SLOT_DELETED")

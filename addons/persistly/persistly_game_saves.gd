@@ -187,6 +187,37 @@ func sign_in_with_provider(input: Dictionary) -> Dictionary:
 	return _exchange_provider_session(input, account_session_token, account_id)
 
 
+func connect_with_firebase_token(firebase_id_token: String, options := {}) -> Dictionary:
+	if typeof(options) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "connect_with_firebase_token options must be a dictionary.")
+	var input := (options as Dictionary).duplicate(true)
+	input["provider"] = "firebase"
+	input["token"] = firebase_id_token
+	return connect_provider(input)
+
+
+func connect_with_supabase_token(supabase_access_token: String, options := {}) -> Dictionary:
+	if typeof(options) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "connect_with_supabase_token options must be a dictionary.")
+	var input := (options as Dictionary).duplicate(true)
+	input["provider"] = "supabase"
+	input["token"] = supabase_access_token
+	return connect_provider(input)
+
+
+func connect_with_auth0_token(auth0_token: String, options := {}) -> Dictionary:
+	if typeof(options) != TYPE_DICTIONARY:
+		return _error_result(ERROR_INVALID_REQUEST, "connect_with_auth0_token options must be a dictionary.")
+	var input := (options as Dictionary).duplicate(true)
+	input["provider"] = "auth0"
+	input["token"] = auth0_token
+	return connect_provider(input)
+
+
+func connect_provider(input: Dictionary) -> Dictionary:
+	return link_provider(input)
+
+
 func link_provider(input: Dictionary) -> Dictionary:
 	var preflight := _validate_configured("link_provider")
 	if not preflight.is_empty():

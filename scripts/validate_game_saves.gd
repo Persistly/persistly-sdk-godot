@@ -85,6 +85,10 @@ func _check_account_first_facade_surface(game_saves_script: Script) -> void:
 		"sign_in_with_supabase_token",
 		"sign_in_with_auth0_token",
 		"sign_in_with_provider",
+		"connect_with_firebase_token",
+		"connect_with_supabase_token",
+		"connect_with_auth0_token",
+		"connect_provider",
 		"link_provider",
 		"list_linked_providers",
 		"sign_out",
@@ -408,11 +412,11 @@ func _check_auth_facade_session_flow(game_saves_script: Script) -> void:
 	_expect_equal(linked_supabase.get("status", ""), "synced", "link_provider Supabase status")
 	_expect_equal(linked_supabase.get("linkedProvider", ""), "supabase", "link_provider Supabase linkedProvider")
 
-	var linked_auth0: Dictionary = persistly.sign_in_with_auth0_token("auth0-token", {
+	var linked_auth0: Dictionary = persistly.connect_with_auth0_token("auth0-token", {
 		"deviceLabel": "Desktop",
 	})
-	_expect_equal(linked_auth0.get("status", ""), "synced", "sign_in_with_auth0_token status")
-	_expect_equal(linked_auth0.get("linkedProvider", ""), "auth0", "sign_in_with_auth0_token linkedProvider")
+	_expect_equal(linked_auth0.get("status", ""), "synced", "connect_with_auth0_token status")
+	_expect_equal(linked_auth0.get("linkedProvider", ""), "auth0", "connect_with_auth0_token linkedProvider")
 
 	var providers: Dictionary = persistly.list_linked_providers()
 	var rows: Array = providers.get("providers", [])

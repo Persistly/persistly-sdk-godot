@@ -19,5 +19,8 @@ func _ready() -> void:
 	var firebase_id_token := "firebase_id_token_from_your_login_flow"
 	var connected := saves.connect_firebase(firebase_id_token, OS.get_name())
 	if connected.get("status", "") == "account_auth_conflict":
-		# Local anonymous progress is still present. Only switch after confirmation.
+		# Local anonymous progress is still present. Safe options are:
+		# - keep local progress and continue playing
+		# - sign out of Firebase, choose a different Firebase account, then retry connect_firebase()
+		# - discard local Persistly state and use the existing provider-linked cloud account
 		pass

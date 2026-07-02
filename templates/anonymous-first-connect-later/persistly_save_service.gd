@@ -33,8 +33,9 @@ func connect_firebase(firebase_id_token: String, device_label: String = "") -> D
 	})
 
 
-func switch_to_provider_account(firebase_id_token: String, device_label: String = "") -> Dictionary:
-	# Only call this after the player confirms replacing this device's local progress.
+func discard_local_and_use_provider_account(firebase_id_token: String, device_label: String = "") -> Dictionary:
+	# Only call this after the player confirms discarding this device's local Persistly state.
+	# This does not copy anonymous progress into the provider-linked cloud account.
 	var cleared := persistly.clear_local_account()
 	if cleared.has("error"):
 		return cleared

@@ -37,6 +37,8 @@ Use `create_account()` for explicit account-first flows, or `attach_account(acco
 
 Use `accountMode: "authRequired"` when your game allows local saves but requires Firebase, Supabase, or Auth0 sign-in before cloud sync. Call `sign_in_with_firebase_token()`, `sign_in_with_supabase_token()`, or `sign_in_with_auth0_token()` to exchange a provider token for the Persistly account session used by normal save and sync calls. Provider tokens are not sent on normal save/load/sync routes.
 
+For anonymous-first games, use `connect_with_firebase_token()`, `connect_with_supabase_token()`, or `connect_with_auth0_token()` when a player already has local or cloud progress and later connects a provider. If the provider is already linked to another Persistly account, connect-later returns `account_auth_conflict` and preserves the current local anonymous progress. Do not merge, copy, import, overwrite, or replace the active account automatically. Safe choices are: keep local progress and continue playing, sign out of the provider and choose a different provider account, or explicitly discard local Persistly state on this device and sign into the existing provider-linked cloud account.
+
 Use `create_transfer_code()` on a device that already has a local account session, and `attach_with_transfer_code(code)` on an empty second device for short-lived anonymous save transfer. Transfer codes are single-use and should be shown to the player without logging them.
 
 Use `get_account_data()` for account-wide data. `patch_account_data()` shallow-merges top-level keys and deletes a top-level key when its patch value is `null`.

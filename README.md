@@ -124,7 +124,7 @@ var providers := persistly.list_linked_providers()
 var signed_out := persistly.sign_out()
 ```
 
-If the provider is already linked to another Persistly account, connect-later returns `account_auth_conflict` and preserves the current local anonymous progress. Do not automatically clear local data or switch accounts; ask the player first.
+If the provider is already linked to another Persistly account, connect-later returns `account_auth_conflict` and preserves the current local anonymous progress. Do not merge, copy, import, overwrite, or replace the active account automatically. Safe choices are: keep local progress and continue playing, sign out of the provider and choose a different provider account, or explicitly discard local Persistly state on this device and sign into the existing provider-linked cloud account.
 
 `sign_in_with_provider`, `connect_provider`, and `link_provider` accept only `"firebase"`, `"supabase"`, and `"auth0"` provider keys. Other provider keys are rejected before the SDK sends a request.
 

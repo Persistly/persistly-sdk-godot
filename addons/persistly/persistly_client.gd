@@ -424,6 +424,24 @@ func get_runtime_config(game_config_version: int = -1) -> Dictionary:
 	return response
 
 
+func get_wallet_balances(account_id: String, account_session_token: String) -> Dictionary:
+	var preflight := _validate_account_session_configuration("get_wallet_balances", account_id, account_session_token)
+	if not preflight.is_empty():
+		return preflight
+
+	var response := _request_json(
+		"GET",
+		"/api/v1/secure/wallet/balances",
+		null,
+		account_id,
+		account_session_token)
+	if response.has("error"):
+		return response
+	if typeof(response.get("balances", null)) != TYPE_ARRAY:
+		return _error_result(ERROR_SERVER, "get_wallet_balances response is missing balances.")
+	return response
+
+
 func _clear_cached_record(record_id: String) -> void:
 	_save_cache.erase(record_id)
 

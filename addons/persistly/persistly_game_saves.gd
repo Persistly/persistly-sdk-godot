@@ -299,6 +299,15 @@ func get_account_data() -> Dictionary:
 	return account_data.duplicate(true)
 
 
+func get_wallet_balances() -> Dictionary:
+	var preflight := _validate_configured("get_wallet_balances")
+	if not preflight.is_empty():
+		return preflight
+	if account_id.strip_edges().is_empty() or account_session_token.strip_edges().is_empty():
+		return _error_result(ERROR_INVALID_REQUEST, "get_wallet_balances requires accountId and accountSessionToken.")
+	return _client.get_wallet_balances(account_id, account_session_token)
+
+
 func save_account_data(new_account_data: Dictionary) -> Dictionary:
 	var preflight := _validate_configured("save_account_data")
 	if not preflight.is_empty():
